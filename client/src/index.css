@@ -1,0 +1,87 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Anton", sans-serif;
+  --font-stencil: "Big Shoulders Stencil Text", sans-serif;
+  --font-body: "Manrope", sans-serif;
+
+  --color-ink: #0c0c0e;
+  --color-panel: #18181b;
+  --color-panel-2: #202023;
+  --color-chalk: #f2f0e9;
+  --color-chalk-dim: #c9c7be;
+  --color-steel: #9a9ca3;
+  --color-steel-dim: #6f7176;
+  --color-plate-red: #d62828;
+  --color-plate-red-dim: #a81f1f;
+  --color-plate-yellow: #f2b705;
+  --color-bone: #ece8dd;
+  --color-bone-2: #e2ddce;
+  --color-bone-ink: #18181b;
+  --color-line: rgba(242, 240, 233, 0.1);
+  --color-line-strong: rgba(242, 240, 233, 0.18);
+
+  --breakpoint-xs: 420px;
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--color-ink);
+    color: var(--color-chalk);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background: var(--color-plate-red);
+    color: var(--color-chalk);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-plate-yellow);
+    outline-offset: 3px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer utilities {
+  .text-stencil {
+    font-family: var(--font-stencil);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .text-display {
+    font-family: var(--font-display);
+    text-transform: uppercase;
+    letter-spacing: 0.01em;
+  }
+
+  .plate-texture {
+    background-image:
+      radial-gradient(circle at 1px 1px, rgba(242,240,233,0.06) 1px, transparent 0);
+    background-size: 22px 22px;
+  }
+
+  .knurl-texture {
+    background-image:
+      repeating-linear-gradient(45deg, rgba(242,240,233,0.035) 0, rgba(242,240,233,0.035) 1px, transparent 1px, transparent 8px),
+      repeating-linear-gradient(-45deg, rgba(242,240,233,0.035) 0, rgba(242,240,233,0.035) 1px, transparent 1px, transparent 8px);
+  }
+}
