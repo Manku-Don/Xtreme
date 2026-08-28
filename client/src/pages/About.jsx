@@ -19,7 +19,7 @@ export default function About() {
       <section className="border-y border-line">
         <div className="mx-auto grid max-w-7xl gap-0 md:grid-cols-2">
           <Reveal className="relative min-h-[320px] overflow-hidden md:min-h-[480px]">
-            <img src={IMAGES.chalkHands} alt="Chalked hands gripping a barbell before a lift" className="h-full w-full object-cover" />
+            <img src={IMAGES.chalkHands.src} alt={IMAGES.chalkHands.alt} className="h-full w-full object-cover" />
           </Reveal>
           <Reveal delay={0.1} className="flex flex-col justify-center gap-5 bg-panel p-8 sm:p-14">
             <span className="text-stencil text-xs font-bold text-plate-yellow">Our Floor</span>
@@ -61,7 +61,7 @@ export default function About() {
 
       <section className="relative overflow-hidden border-t border-line px-5 py-24 sm:px-8">
         <div className="absolute inset-0">
-          <img src={IMAGES.womanLifting} alt="" className="h-full w-full object-cover opacity-25" />
+          <img src={IMAGES.womanLifting.src} alt="" className="h-full w-full object-cover opacity-25" />
           <div className="absolute inset-0 bg-ink/85" />
         </div>
         <div className="relative mx-auto flex max-w-2xl flex-col items-center gap-6 text-center">

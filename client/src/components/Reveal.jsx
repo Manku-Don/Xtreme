@@ -7,6 +7,7 @@ export default function Reveal({
   className = "",
   once = true,
   as = "div",
+  ...rest
 }) {
   const Comp = motion[as] || motion.div;
   return (
@@ -16,6 +17,7 @@ export default function Reveal({
       viewport={{ once, amount: 0.25 }}
       transition={{ duration: 0.6, delay, ease: [0.22, 1, 0.36, 1] }}
       className={className}
+      {...rest}
     >
       {children}
     </Comp>

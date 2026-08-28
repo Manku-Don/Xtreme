@@ -1,4 +1,5 @@
-import { motion } from "framer-motion";
+import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { ArrowRight, Star, Flame } from "lucide-react";
 import Button from "../components/Button";
 import Reveal from "../components/Reveal";
@@ -8,6 +9,8 @@ import WhyUsCard from "../components/WhyUsCard";
 import ProgramCard from "../components/ProgramCard";
 import PricingCard from "../components/PricingCard";
 import ReviewsCarousel from "../components/ReviewsCarousel";
+import StatsStrip from "../components/StatsStrip";
+import ForgeIgnition from "../components/ForgeIgnition";
 import { WHY_US, PROGRAMS, PRICING_PLANS, GYM, IMAGES } from "../data/siteData";
 
 const MARQUEE_ITEMS = [
@@ -20,66 +23,105 @@ const MARQUEE_ITEMS = [
 ];
 
 export default function Home() {
+  const [showIntro, setShowIntro] = useState(() => {
+    return !sessionStorage.getItem("hasSeenIntro");
+  });
+
+  const handleIntroComplete = () => {
+    sessionStorage.setItem("hasSeenIntro", "true");
+    setShowIntro(false);
+  };
+
+  useEffect(() => {
+    if (showIntro) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+  }, [showIntro]);
+
   const googleReviewsUrl = `https://search.google.com/local/reviews?placeid=${GYM.address.placeId}`;
+  
+  const baseDelay = showIntro ? 2.8 : 0;
 
   return (
     <div>
+      <AnimatePresence>
+        {showIntro && <ForgeIgnition onComplete={handleIntroComplete} />}
+      </AnimatePresence>
+
       {/* HERO */}
       <section className="relative overflow-hidden border-b border-line">
         <div className="absolute inset-0 z-0">
-          <img src={IMAGES.heroGym} alt="" className="h-full w-full object-cover opacity-45" />
-          <div className="absolute inset-0 bg-gradient-to-t from-ink via-ink/85 to-ink/50" />
-          <div className="absolute inset-0 bg-gradient-to-r from-ink/60 via-transparent to-ink/60" />
+          <img src={IMAGES.heroGym.src} alt="" className="h-full w-full object-cover opacity-30" />
+          <div className="absolute inset-0 bg-gradient-to-t from-ink via-ink/90 to-ink/60" />
         </div>
         
         <ChalkDust />
 
-        <div className="relative z-10 mx-auto flex max-w-7xl flex-col gap-8 px-5 pb-24 pt-20 sm:px-8 sm:pb-32 sm:pt-28">
-          <motion.span
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="text-stencil w-fit border border-line-strong bg-ink/50 backdrop-blur-md px-3 py-1.5 text-xs font-bold text-plate-yellow"
-          >
-            5AM – 10PM &middot; MON–SAT &middot; AIR CONDITIONED
-          </motion.span>
-
-          <motion.h1
+        <div className="relative z-10 mx-auto flex max-w-7xl flex-col gap-8 px-5 pb-24 pt-16 sm:px-8 sm:pb-32 sm:pt-20">
+          
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.1 }}
-            className="text-display max-w-4xl text-6xl leading-[0.92] sm:text-7xl md:text-8xl"
+            transition={{ duration: 0.8, delay: baseDelay }}
+            className="w-full max-w-5xl"
           >
-            {GYM.tagline}
-          </motion.h1>
+            {/* LOGO AND BRANDING */}
+            <div className="relative mt-4 flex flex-col items-center justify-center py-8">
+              
+              {/* The Logo Image - Rendered exactly as it is in your file */}
+              <img
+                src="/Xtreme logo.png"
+                alt="Lifter Logo"
+                className="relative z-10 h-32 w-auto drop-shadow-2xl sm:h-48"
+              />
 
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-            className="max-w-xl text-lg leading-relaxed text-chalk-dim sm:text-xl"
-          >
-            {GYM.subTagline} Plans start at{" "}
-            <span className="font-semibold text-chalk">₹1,200/month</span>.
-          </motion.p>
+              {/* Billboard Font styling matching your image exactly */}
+              <h1
+                className="relative z-10 mt-6 text-center font-['Anton'] text-[2.75rem] uppercase leading-none tracking-wide text-[#fde047] sm:mt-8 sm:text-7xl md:text-[5.5rem] lg:text-8xl"
+                style={{
+                  WebkitTextStroke: "2.5px #111",
+                  textShadow: "4px 4px 0px #111, 0 10px 25px rgba(0,0,0,0.7)",
+                }}
+              >
+                Xtreme Fitness Gym
+              </h1>
+            </div>
+          </motion.div>
 
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.3 }}
-            className="flex flex-wrap gap-4"
+            transition={{ duration: 0.6, delay: baseDelay + 0.2 }}
+            className="mt-4 flex flex-col gap-6"
           >
-            <Button to="/pricing" variant="primary">
-              See Pricing <ArrowRight size={16} />
-            </Button>
-            <Button to="/contact" variant="ghost">
-              Visit The Floor
-            </Button>
+            <h2 className="text-display max-w-3xl text-4xl leading-tight text-chalk drop-shadow-md sm:text-5xl">
+              {GYM.tagline}
+            </h2>
+
+            <span className="text-stencil w-fit border border-line-strong bg-ink/50 px-3.5 py-2 text-sm font-bold text-plate-yellow shadow-[0_0_20px_rgba(242,183,5,0.15)] backdrop-blur-md">
+              5AM – 10PM &middot; MON–SAT &middot; AIR CONDITIONED
+            </span>
+            
+            <p className="max-w-xl text-lg leading-relaxed text-chalk-dim sm:text-xl">
+              {GYM.subTagline} Plans start at{" "}
+              <span className="font-semibold text-chalk">₹1,200/month</span>.
+            </p>
+
+            <div className="mt-2 flex flex-wrap gap-4">
+              <Button to="/pricing" variant="primary">
+                See Pricing <ArrowRight size={16} />
+              </Button>
+              <Button to="/contact" variant="ghost">
+                Visit The Floor
+              </Button>
+            </div>
           </motion.div>
         </div>
 
         {/* PREMIUM INTERACTIVE FIRE MARQUEE */}
-        <div className="group relative flex overflow-hidden border-t border-line bg-ink py-6 cursor-default">
+        <div className="group relative flex cursor-default overflow-hidden border-t border-line bg-ink py-6">
           <motion.div
             animate={{ 
               opacity: [0.15, 0.4, 0.15],
@@ -100,8 +142,8 @@ export default function Home() {
             }}
           >
             {[...MARQUEE_ITEMS, ...MARQUEE_ITEMS].map((item, i) => (
-              <div key={i} className="flex items-center shrink-0">
-                <span className="text-stencil px-12 text-[0.9rem] font-bold tracking-[0.2em] text-steel transition-colors duration-500 group-hover:text-chalk group-hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.3)]">
+              <div key={i} className="flex shrink-0 items-center">
+                <span className="text-stencil px-12 text-base font-bold tracking-[0.2em] text-steel transition-colors duration-500 group-hover:text-chalk group-hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.3)]">
                   {item}
                 </span>
                 <Flame 
@@ -115,6 +157,7 @@ export default function Home() {
         </div>
       </section>
 
+      <StatsStrip />
 
       {/* WHY US */}
       <section className="border-t border-line bg-panel/40 px-5 py-24 sm:px-8">
@@ -162,8 +205,7 @@ export default function Home() {
           className="mx-auto"
         />
         
-        {/* Updated Reviews Header with Link */}
-        <div className="mt-6 mb-10 flex flex-col items-center justify-center gap-4">
+        <div className="mb-10 mt-6 flex flex-col items-center justify-center gap-4">
           <div className="flex items-center gap-2">
             <Star size={18} fill="var(--color-plate-yellow)" stroke="var(--color-plate-yellow)" />
             <span className="text-chalk-dim">4.8 on Google </span>
@@ -172,7 +214,7 @@ export default function Home() {
             href={googleReviewsUrl} 
             target="_blank" 
             rel="noreferrer"
-            className="text-stencil text-xs font-bold tracking-[0.2em] text-plate-red transition-colors hover:text-plate-yellow underline decoration-line-strong underline-offset-4"
+            className="text-stencil text-sm font-bold tracking-[0.2em] text-plate-red underline decoration-line-strong underline-offset-4 transition-all duration-300 hover:text-plate-yellow hover:drop-shadow-[0_0_8px_rgba(242,183,5,0.4)]"
           >
             READ ALL GOOGLE REVIEWS &rarr;
           </a>
@@ -202,11 +244,11 @@ export default function Home() {
       {/* CTA */}
       <section className="relative overflow-hidden px-5 py-24 sm:px-8">
         <div className="absolute inset-0 z-0">
-          <img src={IMAGES.gymFloor} alt="" className="h-full w-full object-cover opacity-30" />
+          <img src={IMAGES.gymFloor.src} alt="" className="h-full w-full object-cover opacity-30" />
           <div className="absolute inset-0 bg-ink/85" />
         </div>
         <div className="relative z-10 mx-auto flex max-w-3xl flex-col items-center gap-6 text-center">
-          <h2 className="text-display text-4xl sm:text-6xl">Your first set starts today.</h2>
+          <h2 className="text-display text-4xl drop-shadow-md sm:text-6xl">Your first set starts today.</h2>
           <p className="max-w-lg text-lg text-chalk-dim">
             Walk in between {GYM.hours}, {GYM.days.toLowerCase()}. No pressure, no pushy sales pitch — just the floor.
           </p>

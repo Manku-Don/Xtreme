@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { X, ChevronLeft, ChevronRight } from "lucide-react";
 import SectionHeading from "../components/SectionHeading";
@@ -18,6 +18,18 @@ export default function Gallery() {
     e?.stopPropagation();
     setActiveIndex((i) => (i - 1 + GALLERY_IMAGES.length) % GALLERY_IMAGES.length);
   };
+
+  // Keyboard support for the lightbox: Escape closes, arrow keys navigate.
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") close();
+      if (e.key === "ArrowRight") next();
+      if (e.key === "ArrowLeft") prev();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isOpen]);
 
   return (
     <div>
@@ -65,6 +77,9 @@ export default function Gallery() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={close}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Gallery image viewer"
             className="fixed inset-0 z-[60] flex items-center justify-center bg-ink/95 p-4 sm:p-10"
           >
             <button

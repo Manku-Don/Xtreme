@@ -15,6 +15,11 @@ export default function Contact() {
     setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
   };
 
+  const handlePhoneChange = (e) => {
+    const digitsOnly = e.target.value.replace(/\D/g, "").slice(0, 10);
+    setForm((f) => ({ ...f, phone: digitsOnly }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setStatus("loading");
@@ -117,7 +122,7 @@ export default function Contact() {
                 required
                 value={form.name}
                 onChange={handleChange}
-                className="mt-2 w-full border border-line-strong bg-panel-2 px-4 py-3 text-chalk placeholder:text-steel-dim focus:border-plate-red"
+                className="mt-2 w-full border border-line-strong bg-panel-2 px-4 py-3 text-chalk placeholder:text-steel-dim outline-none transition-colors duration-200 focus:border-plate-red focus:ring-1 focus:ring-plate-red/30"
                 placeholder="Your full name"
               />
             </div>
@@ -129,10 +134,14 @@ export default function Contact() {
                 id="phone"
                 name="phone"
                 type="tel"
+                inputMode="numeric"
                 required
+                pattern="[6-9][0-9]{9}"
+                title="Enter a valid 10-digit mobile number"
+                maxLength={10}
                 value={form.phone}
-                onChange={handleChange}
-                className="mt-2 w-full border border-line-strong bg-panel-2 px-4 py-3 text-chalk placeholder:text-steel-dim focus:border-plate-red"
+                onChange={handlePhoneChange}
+                className="mt-2 w-full border border-line-strong bg-panel-2 px-4 py-3 text-chalk placeholder:text-steel-dim outline-none transition-colors duration-200 focus:border-plate-red focus:ring-1 focus:ring-plate-red/30"
                 placeholder="10-digit mobile number"
               />
             </div>
@@ -146,7 +155,7 @@ export default function Contact() {
                 rows={4}
                 value={form.message}
                 onChange={handleChange}
-                className="mt-2 w-full resize-none border border-line-strong bg-panel-2 px-4 py-3 text-chalk placeholder:text-steel-dim focus:border-plate-red"
+                className="mt-2 w-full resize-none border border-line-strong bg-panel-2 px-4 py-3 text-chalk placeholder:text-steel-dim outline-none transition-colors duration-200 focus:border-plate-red focus:ring-1 focus:ring-plate-red/30"
                 placeholder="Which plan are you interested in?"
               />
             </div>

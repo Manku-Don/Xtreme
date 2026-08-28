@@ -2,48 +2,69 @@
 // Swap image URLs, copy, trainer bios and the address block here as real
 // assets come in — nothing else in the codebase needs to change.
 
-export const IMAGES = [ 
+// Named, single-use images referenced by key across the site (hero
+// backgrounds, About/Trainers feature panels). Previously this was a flat
+// array, so every `IMAGES.heroGym` / `IMAGES.gymFloor` / etc. lookup in the
+// pages silently resolved to `undefined` and rendered a broken image — this
+// object shape is what those pages actually expect.
+export const IMAGES = {
+  heroGym: {
+    src: "/images/gym-floor-wide-shot.jpeg",
+    alt: "A wide-angle view of the training floor, with members lifting under warm linear ceiling lighting.",
+  },
+  gymFloor: {
+    src: "/images/weight-rack-mirror-selfie.jpeg",
+    alt: "Rows of dumbbells racked along the training floor.",
+  },
+  chalkHands: {
+    src: "/images/flexing-man-savage-sign.jpeg",
+    alt: "A member training under the gym's 'Be Savage Not Average' wall sign.",
+  },
+  womanLifting: {
+    src: "/images/gym-floor-wide-shot.jpeg",
+    alt: "Members training together on the floor, including a woman mid-set on the machines.",
+  },
+  personalTraining: {
+    src: "/images/gym-selfie-mirror.jpeg",
+    alt: "A member on the training floor, surrounded by racks and machines mid-session.",
+  },
+};
+
+// Full gallery — every real photo of the floor, shown as-is on the Gallery page.
+export const GALLERY_IMAGES = [
   {
-    // A man in a white tank top and patterned pants taking a selfie in a mirror showing the modern gym floor.
-    src: "/images/gym-selfie-mirror.jpeg", // Update with your actual path
+    src: "/images/gym-floor-wide-shot.jpeg",
+    alt: "A wide-angle view of a busy gym floor with various workout equipment and people training under modern linear lighting.",
+  },
+  {
+    src: "/images/gym-selfie-mirror.jpeg",
     alt: "A man taking a mirror selfie in a well-equipped gym, wearing white tank top and unique graphic pants.",
   },
   {
-    // "Dance Xtreme" wall art with a crown logo, red brick, and mirrors.
-    src: "/images/dance-xtreme-wall.jpeg", // Update with your actual path
-    alt: "A wall with 'Dance Xtreme' lettering, a crown logo, red brick texture, and a large mirror reflecting the space.",
-  },
-  {
-    // A man in a white tank top taking a mirror selfie with the "Dance Xtreme" sign in the background.
-    src: "/images/man-at-dance-xtreme.jpeg", // Update with your actual path
-    alt: "A man in a white tank top taking a mirror selfie in front of the 'Dance Xtreme' wall mural.",
-  },
-  {
-    // A man in a black shirt taking a mirror selfie with dumbbell racks in the foreground.
-    src: "/images/weight-rack-mirror-selfie.jpeg", // Update with your actual path
+    src: "/images/weight-rack-mirror-selfie.jpeg",
     alt: "A man taking a mirror selfie, with rows of dumbbell racks and weights in the foreground.",
   },
   {
-    // A man in a white tank top flexing with the "Be Savage Not Average" sign.
-    src: "/images/flexing-man-savage-sign.jpeg", // Update with your actual path
+    src: "/images/flexing-man-savage-sign.jpeg",
     alt: "A man in a white tank top flexing his arms under a motivational sign that reads 'BE SAVAGE NOT AVERAGE'.",
   },
   {
-    // A man posing next to a large mural of Hanuman.
-    src: "/images/man-posing-with-hanuman-mural.jpeg", // Update with your actual path
+    src: "/images/dance-xtreme-wall.jpeg",
+    alt: "A wall with 'Dance Xtreme' lettering, a crown logo, red brick texture, and a large mirror reflecting the space.",
+  },
+  {
+    src: "/images/man-at-dance-xtreme.jpeg",
+    alt: "A man in a white tank top taking a mirror selfie in front of the 'Dance Xtreme' wall mural.",
+  },
+  {
+    src: "/images/man-posing-with-hanuman-mural.jpeg",
     alt: "A man in a black t-shirt flexing his bicep next to a large, vibrant mural of Hanuman.",
   },
   {
-    // A close-up of the detailed Hanuman mural.
-    src: "/images/hanuman-mural-closeup.jpeg", // Update with your actual path
+    src: "/images/hanuman-mural-closeup.jpeg",
     alt: "A detailed and powerful close-up of the Hanuman wall mural.",
   },
-  {
-    // A wide shot of the busy gym floor.
-    src: "/images/gym-floor-wide-shot.jpeg", // Update with your actual path
-    alt: "A wide-angle view of a busy gym floor with various workout equipment and people training under modern linear lighting.",
-  },
- ];
+];
 
 export const GYM = {
   name: "Xtreme Fitness Gym",
@@ -222,7 +243,5 @@ export const REVIEWS = [
     rating: 5,
   },
 ];
-
-export const GALLERY_IMAGES = IMAGES;
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";

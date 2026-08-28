@@ -29,7 +29,7 @@ export default function Trainers() {
       <section className="border-t border-line">
         <div className="mx-auto grid max-w-7xl md:grid-cols-2">
           <Reveal className="relative min-h-[280px] overflow-hidden md:min-h-[420px]">
-            <img src={IMAGES.personalTraining} alt="Coach spotting a member during a set" className="h-full w-full object-cover" />
+            <img src={IMAGES.personalTraining.src} alt={IMAGES.personalTraining.alt} className="h-full w-full object-cover" />
           </Reveal>
           <Reveal delay={0.1} className="flex flex-col justify-center gap-4 bg-panel p-8 sm:p-14">
             <span className="text-stencil text-xs font-bold text-plate-yellow">Coaching Standard</span>

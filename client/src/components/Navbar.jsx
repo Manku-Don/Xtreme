@@ -38,40 +38,63 @@ export default function Navbar() {
         scrolled ? "bg-ink/90 backdrop-blur-md border-b border-line" : "bg-transparent border-b border-transparent"
       }`}
     >
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 sm:px-8">
-        {/* Logo link with smooth scroll-to-top */}
-        <NavLink
-          to="/"
-          onClick={scrollToTop}
-          aria-label="Xtreme Fitness Gym home"
-          className="flex items-center"
-        >
-          <img
-            src="/Xtreme logo.png"
-            alt="Xtreme Fitness Gym Logo"
-            className="h-10 w-auto object-contain"
-          />
+      <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-2 sm:px-8">
+        <NavLink to="/" onClick={scrollToTop} aria-label="Xtreme Fitness Gym home">
+          {/* Billboard Red Branding Container - Forced into a vertical stack (flex-col) */}
+          <span className="inline-flex flex-col items-center justify-center rounded bg-gradient-to-b from-[#ef4444] via-[#dc2626] to-[#991b1b] px-3 py-1.5 shadow-[0_0_15px_rgba(220,38,38,0.4)] ring-1 ring-white/10 transition-transform duration-300 hover:scale-[1.03]">
+            
+            {/* The Lifter Icon */}
+            <img
+              src="/Xtreme logo.png"
+              alt="Xtreme Fitness Gym Logo"
+              className="h-7 w-auto object-contain drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]"
+            />
+            
+            {/* The Full Yellow Billboard Text Stacked Below */}
+            <span
+              className="mt-1 font-['Anton'] text-[0.6rem] leading-none uppercase tracking-[0.05em] text-[#fde047]"
+              style={{
+                WebkitTextStroke: "0.5px #000",
+                textShadow: "1px 1px 0px #000",
+              }}
+            >
+              Xtreme Fitness Gym
+            </span>
+          </span>
         </NavLink>
 
-        <nav className="hidden items-center gap-8 lg:flex">
+        <nav className="hidden items-center gap-2 lg:flex">
           {NAV_LINKS.map((link) => (
             <NavLink
               key={link.to}
               to={link.to}
               end={link.to === "/"}
-              className={({ isActive }) =>
-                `text-stencil text-xs font-bold tracking-[0.14em] transition-colors ${
-                  isActive ? "text-plate-red" : "text-chalk-dim hover:text-chalk"
-                }`
-              }
+              className="group relative px-3.5 py-2"
             >
-              {link.label}
+              {({ isActive }) => (
+                <>
+                  <span
+                    className={`text-stencil text-sm font-bold tracking-[0.14em] transition-colors ${
+                      isActive ? "text-plate-red" : "text-chalk-dim group-hover:text-chalk"
+                    }`}
+                  >
+                    {link.label}
+                  </span>
+                  {isActive && (
+                    <motion.span
+                      layoutId="nav-underline"
+                      className="absolute inset-x-3.5 -bottom-0.5 h-[2px] bg-plate-red"
+                      transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                    />
+                  )}
+                </>
+              )}
             </NavLink>
           ))}
         </nav>
 
         <div className="hidden lg:block">
-          <Button to="/pricing" variant="primary" className="text-xs">
+          <Button to="/pricing" variant="primary" className="text-sm">
             Join Now
           </Button>
         </div>
@@ -79,7 +102,7 @@ export default function Navbar() {
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="flex h-10 w-10 items-center justify-center rounded-sm border border-line-strong text-chalk lg:hidden"
+          className="flex h-10 w-10 items-center justify-center rounded-sm border border-line-strong text-chalk transition-colors hover:border-plate-red hover:text-plate-red lg:hidden"
           aria-label={open ? "Close menu" : "Open menu"}
           aria-expanded={open}
         >
@@ -94,7 +117,7 @@ export default function Navbar() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 top-[65px] z-40 bg-ink lg:hidden"
+            className="plate-texture fixed inset-0 top-[61px] z-40 bg-ink lg:hidden"
           >
             <motion.nav
               className="flex h-full flex-col gap-1 px-6 py-8"
@@ -116,11 +139,7 @@ export default function Navbar() {
                   <NavLink
                     to={link.to}
                     end={link.to === "/"}
-                    className={({ isActive }) =>
-                      `text-display block border-b border-line py-4 text-3xl ${
-                        isActive ? "text-plate-red" : "text-chalk"
-                      }`
-                    }
+                    className="text-display flex items-center justify-between border-b border-line py-5 text-4xl text-chalk transition-colors duration-300 hover:text-plate-red"
                   >
                     {link.label}
                   </NavLink>
@@ -130,7 +149,7 @@ export default function Navbar() {
                 variants={{ closed: { opacity: 0, x: -16 }, open: { opacity: 1, x: 0 } }}
                 className="mt-8"
               >
-                <Button to="/pricing" variant="primary" className="w-full">
+                <Button to="/pricing" variant="primary" className="w-full text-lg py-4">
                   Join Now
                 </Button>
               </motion.div>
