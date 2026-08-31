@@ -66,6 +66,16 @@ export const GALLERY_IMAGES = [
   },
 ];
 
+// Central copy for the "1-day free demo" offer, referenced from the
+// announcement bar, hero, pricing page and contact form so the wording
+// only needs to change in one place.
+export const FREE_DEMO = {
+  short: "1-Day Free Demo",
+  badge: "1-Day Free Demo — No Card, No Commitment",
+  headline: "Try a full day on the floor, on us.",
+  body: "Walk in any open hour and train a complete session — full equipment access, a coach on the floor to show you around — before you decide on a plan. No card, no pressure.",
+};
+
 export const GYM = {
   name: "Xtreme Fitness Gym",
   tagline: "Train Like It Costs More.",

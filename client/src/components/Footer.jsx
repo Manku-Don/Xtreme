@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
-import { MapPin, Clock, Phone, Mail, Star, ArrowRight } from "lucide-react";
+import { MapPin, Clock, Phone, Mail, Star, ArrowRight, Flame, MessageCircle } from "lucide-react";
 import Button from "./Button";
-import { GYM, NAV_LINKS } from "../data/siteData";
+import { GYM, NAV_LINKS, FREE_DEMO } from "../data/siteData";
 
 export default function Footer() {
   const scrollToTop = () => {
@@ -24,18 +24,17 @@ export default function Footer() {
             onClick={scrollToTop}
             aria-label="Go to home and scroll to top"
           >
-            {/* Billboard Red Branding Container - Larger scale for the footer */}
-            <span className="inline-flex flex-col items-center justify-center rounded-lg bg-gradient-to-b from-[#ef4444] via-[#dc2626] to-[#991b1b] px-6 py-3.5 shadow-[0_4px_25px_rgba(220,38,38,0.4)] ring-1 ring-white/10 transition-transform duration-300 hover:scale-[1.03]">
+            <span className="inline-flex flex-col items-center justify-center rounded-lg bg-gradient-to-b from-plate-red to-plate-red-dim px-6 py-3.5 shadow-[0_4px_25px_rgba(214,40,40,0.4),inset_0_1px_0_rgba(255,255,255,0.25)] ring-1 ring-white/10 transition-transform duration-300 hover:scale-[1.03]">
               <img
                 src="/Xtreme logo.png"
                 alt="Xtreme Fitness Gym Logo"
                 className="h-12 w-auto object-contain drop-shadow-[0_3px_3px_rgba(0,0,0,0.8)]"
               />
               <span
-                className="mt-2 font-['Anton'] text-sm leading-none uppercase tracking-[0.05em] text-[#fde047] sm:text-base"
+                className="mt-2 font-['Anton'] text-sm leading-none uppercase tracking-[0.05em] text-plate-yellow sm:text-base"
                 style={{
-                  WebkitTextStroke: "1px #000",
-                  textShadow: "2px 2px 0px #000",
+                  WebkitTextStroke: "1px var(--color-ink)",
+                  textShadow: "2px 2px 0px var(--color-ink)",
                 }}
               >
                 Xtreme Fitness Gym
@@ -43,10 +42,9 @@ export default function Footer() {
             </span>
           </Link>
           
+          {/* MARKETING TWEAK: Injected hyper-local landmarks directly into the bio for immediate trust and SEO authority. */}
           <p className="mt-6 max-w-sm text-sm leading-relaxed text-chalk-dim">
-            Xtreme Fitness Gym is a serious strength and conditioning facility in New Delhi. We
-            provide a no-nonsense environment equipped for powerlifting, bodybuilding, and real
-            progress.
+            Located opposite the Janak Cinema Complex, Xtreme Fitness Gym is Raghu Nagar's premier strength and conditioning facility. We provide a no-nonsense environment equipped for powerlifting, bodybuilding, and real progress.
             <br />
             <br />
             {GYM.subTagline}
@@ -83,7 +81,7 @@ export default function Footer() {
         </div>
 
         <div>
-          <h3 className="text-stencil mb-6 text-sm font-bold tracking-[0.15em] text-plate-yellow">Visit</h3>
+          <h3 className="text-stencil mb-6 text-sm font-bold tracking-[0.15em] text-plate-yellow">Visit & Contact</h3>
           <ul className="flex flex-col gap-5 text-sm text-steel">
             <li className="flex items-start gap-3">
               <MapPin size={18} className="shrink-0 text-plate-red" />
@@ -114,6 +112,13 @@ export default function Footer() {
                 {GYM.phone}
               </a>
             </li>
+            {/* MARKETING TWEAK: Added WhatsApp explicit link. WhatsApp is king for conversions in India. */}
+            <li className="flex items-center gap-3">
+              <MessageCircle size={18} className="shrink-0 text-plate-red" />
+              <a href={GYM.whatsapp} target="_blank" rel="noreferrer" className="font-semibold transition-colors hover:text-chalk hover:text-plate-yellow">
+                Chat on WhatsApp
+              </a>
+            </li>
             <li className="flex items-center gap-3">
               <Mail size={18} className="shrink-0 text-plate-red" />
               <a href={`mailto:${GYM.email}`} className="transition-colors hover:text-chalk">
@@ -129,9 +134,15 @@ export default function Footer() {
           <p className="text-stencil text-center text-xs tracking-[0.2em] text-steel-dim sm:text-left">
             © {new Date().getFullYear()} {GYM.name.toUpperCase()} — ALL RIGHTS RESERVED
           </p>
-          <Button to="/pricing" variant="ghost" className="text-sm">
-            Join Now <ArrowRight size={16} />
-          </Button>
+          <div className="flex flex-col items-center gap-2 sm:flex-row sm:gap-4">
+            <span className="text-stencil flex items-center gap-1.5 text-xs font-bold tracking-[0.14em] text-plate-yellow">
+              <Flame size={13} className="text-plate-red" strokeWidth={2.5} />
+              {FREE_DEMO.short.toUpperCase()}
+            </span>
+            <Button to="/pricing" variant="ghost" className="text-sm">
+              View Plans <ArrowRight size={16} />
+            </Button>
+          </div>
         </div>
       </div>
     </footer>
