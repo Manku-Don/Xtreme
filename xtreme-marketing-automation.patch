@@ -1,0 +1,2430 @@
+diff --git a/README.md b/README.md
+index 5228c4b..5da6a62 100644
+--- a/README.md
++++ b/README.md
+@@ -1,15 +1,32 @@
+ # Xtreme Fitness Gym — Website
+ 
+ A full-stack, multi-page website for Xtreme Fitness Gym: a React + Vite frontend
+-(Framer Motion animations, React Router, Tailwind CSS) and a small Node/Express
+-backend that receives contact-form enquiries.
++(Framer Motion animations, React Router, Tailwind CSS) and a Node/Express
++backend that handles contact-form enquiries **and** a lead-tracking /
++WhatsApp marketing-automation layer — cookie-based visitor tracking, an
++interest-scored CRM, consent-gated proximity marketing, and an automated
++WhatsApp follow-up sequence via Meta's WhatsApp Business Cloud API.
+ 
+ ## Structure
+ 
+ ```
+ xtreme-fitness-gym-project/
+ ├── client/     React + Vite frontend
+-└── server/     Express API (handles the Contact page enquiry form)
++│   └── src/
++│       ├── components/CookieConsent.jsx    consent banner (gates tracking)
++│       ├── components/ExitIntentModal.jsx  "before you go" lead capture
++│       ├── components/NearbyBanner.jsx     opt-in "how close am I" widget
++│       ├── pages/Admin.jsx                 owner-only leads dashboard (/admin)
++│       └── utils/tracking.js               visitor/event/geo client helpers
++└── server/     Express API
++    └── src/
++        ├── routes/enquiry.js    Contact-form submissions (admin-key gated to read)
++        ├── routes/track.js      visit / event / geo-proximity tracking
++        ├── routes/leads.js      admin CRM API (list, stats, update, run-now)
++        ├── routes/whatsapp.js   opt-in endpoint + Meta webhook
++        ├── services/whatsapp.js WhatsApp Cloud API wrapper (dry-run by default)
++        ├── services/automation.js  drip-campaign scheduler (node-cron)
++        └── services/leadEngine.js  visitor→lead linking + interest scoring
+ ```
+ 
+ ## Design
+@@ -29,15 +46,14 @@ xtreme-fitness-gym-project/
+ 
+ ```bash
+ cd server
+-cp .env.example .env
++cp .env.example .env      # then fill in ADMIN_API_KEY at minimum — see below
+ npm install
+-npm run dev        # http://localhost:4000
++npm run dev                # http://localhost:4000
+ ```
+ 
+-Enquiries submitted from the Contact page are stored in `server/data/db.json`
+-(a simple JSON file via lowdb — no external database required). Swap this for
+-MongoDB/Mongoose later if you want a real database; the route logic in
+-`server/src/routes/enquiry.js` is intentionally small and easy to replace.
++`server/data/db.json` (auto-created, gitignored) holds everything via lowdb —
++enquiries, leads, visitors, events, the WhatsApp send log, and the drip
++campaign queue. No external database required.
+ 
+ ### 2. Frontend
+ 
+@@ -45,12 +61,11 @@ In a second terminal:
+ 
+ ```bash
+ cd client
+-cp .env.example .env
+ npm install
+-npm run dev         # http://localhost:5173
++npm run dev                 # http://localhost:5173
+ ```
+ 
+-The frontend reads the API URL from `VITE_API_BASE_URL` (see `client/.env.example`).
++The frontend reads the API URL from `VITE_API_BASE_URL` (see `client/.env`).
+ 
+ ### 3. Production build
+ 
+@@ -61,29 +76,78 @@ cd server && npm start         # run the API with a process manager (pm2, etc.)
+ 
+ Deploy `client/dist` as a static site (Vercel/Netlify/Nginx) and the `server/`
+ folder anywhere that runs Node (Render/Railway/a small VPS) — just point
+-`VITE_API_BASE_URL` at wherever the API ends up.
++`VITE_API_BASE_URL` at wherever the API ends up, and `CLIENT_ORIGIN` in the
++server's `.env` back at the deployed frontend URL.
++
++---
++
++## Marketing & lead-automation layer
++
++### What it does
++
++- **Visitor tracking** — every browser gets a first-party, httpOnly cookie
++  (`xfg_vid`). Page views and interest signals (viewed pricing, clicked
++  WhatsApp, etc.) build up an interest score *before* anyone hands over
++  contact info, so a lead already looks "hot" or "cold" the moment they do.
++- **Lead capture, three ways**: the Contact form, an exit-intent popup
++  ("before you go, grab your free demo"), and an opt-in "How Close Am I?"
++  proximity banner. All three funnel into one CRM record per phone number.
++- **Automated WhatsApp follow-up**: opting in sends an immediate welcome,
++  then queues day-1 / day-3 / day-7 template messages. A reply pauses the
++  automation (a human should take it from there); "STOP" unsubscribes
++  immediately and cancels everything queued.
++- **Admin dashboard** at `/admin` (not linked in the site nav) — funnel
++  stats, a sortable lead list with interest scores, inline status/notes
++  editing, a direct `wa.me` link per lead, and a manual "run automation now"
++  button.
++
++### Why it's built the way it is (please read before enabling real sends)
++
++Two design choices were deliberate, not accidental gaps:
++
++1. **Nobody gets messaged just for being physically near the gym.** The geo
++   endpoint (`/api/track/geo`) requires an explicit `consent: true` flag that
++   only `NearbyBanner.jsx`'s button click sends — it powers an on-site
++   "you're 2km away" message, nothing more, unless the visitor separately
++   types in their own phone number. Auto-texting strangers based on location
++   would risk both WhatsApp Business account bans and non-compliance with
++   India's telecom/consent rules — and would just be creepy.
++2. **WhatsApp marketing messages require their own opt-in**, separate from
++   "book a demo." Booking a demo means a callback; the "also message me
++   updates on WhatsApp" checkbox (Contact page) or the act of submitting the
++   exit-intent/nearby forms (whose entire stated purpose is a WhatsApp
++   message) is what enrolls someone in the automated sequence.
++
++### Going live with real WhatsApp sends
++
++Right now the whole pipeline runs in **dry-run mode** — outbound messages are
++logged to `db.json`'s `whatsappLog` instead of actually sent, so you can test
++opt-in → welcome → drip end-to-end with zero WhatsApp Business API access.
++To send real messages:
++
++1. Create a Meta developer app with WhatsApp Business Platform access, get a
++   `WHATSAPP_TOKEN` and `WHATSAPP_PHONE_NUMBER_ID`.
++2. In Meta Business Manager, create and get approved the three template
++   messages named in `.env` (`WHATSAPP_TEMPLATE_DAY1_REMINDER`, etc.) —
++   templates are *required* by Meta for any business-initiated message sent
++   more than 24h after the person last messaged you.
++3. Register your webhook URL (`https://yourdomain.com/api/whatsapp/webhook`)
++   in the Meta dashboard, using the same `WHATSAPP_VERIFY_TOKEN` as `.env`.
++4. Fill in all four values in `server/.env` — sends flip from simulated to
++   real automatically, no code changes needed.
++5. **Change `ADMIN_API_KEY` from the example value** before deploying — the
++   admin routes (including everyone's phone numbers) are gated on it.
+ 
+ ## Things to finish before this goes live
+ 
+-These are called out inline in the code too (search for `TODO`):
+-
+-1. **Trainer bios** — `client/src/data/siteData.js` → `TRAINERS` array currently
+-   holds placeholder names/titles. Swap in real names, photos, and specific
+-   powerlifting achievements.
+-2. **Gallery/section photos** — currently real, freely-licensed stock photography
+-   (Unsplash) standing in for real photos of your floor. Swap the URLs in
+-   `IMAGES` for actual photos of the gym whenever you have them.
+-3. **Reviews** — `REVIEWS` in `siteData.js` has 3 real five-star reviews pulled
+-   from your public Google listing (the tool used here only exposes a handful
+-   of review snippets, not all 51, and doesn't expose a per-review star
+-   rating — one real review that explicitly said "four-star experience" was
+-   excluded, and one about "Sunday practice classes" was left out because it
+-   was about the now-closed academy, not the gym). Open your Google Business
+-   Profile, copy in more 5-star reviews with text, and the carousel will pick
+-   them up automatically — it's not hardcoded to 3.
+-4. **Contact details** — phone number was pulled from the gym's public Google
+-   listing; double check it's current. Email and WhatsApp link are placeholders.
+-5. **Map embed** — currently a plain Google Maps search embed built from the
+-   address text. If you have a Google Maps API key, this can be swapped for a
+-   pinned embed using the Place ID (`ChIJlVKbEOgbDTkRagcWRBXfRqc`) already
+-   stored in `siteData.js`.
++1. **Trainer bios, gallery photos, more reviews** — see inline `TODO`s in
++   `client/src/data/siteData.js`.
++2. **Email** (`GYM.email` in `siteData.js`) is still a placeholder.
++3. **WhatsApp Business API credentials + approved templates** — see above;
++   until then, automation runs in dry-run/simulated mode.
++4. **`ADMIN_API_KEY` and `WHATSAPP_VERIFY_TOKEN`** — both still the example
++   placeholder value in `.env.example`; must be changed before this is
++   reachable from the public internet.
++5. **Map embed** — currently a plain Google Maps search embed. If you have a
++   Google Maps API key, swap for a pinned embed using the Place ID
++   (`ChIJlVKbEOgbDTkRagcWRBXfRqc`) already stored in `siteData.js`.
+diff --git a/client/src/App.jsx b/client/src/App.jsx
+index 6946e20..983d7f7 100644
+--- a/client/src/App.jsx
++++ b/client/src/App.jsx
+@@ -1,8 +1,11 @@
++import { useEffect } from "react";
+ import { Routes, Route, useLocation } from "react-router-dom";
+ import { AnimatePresence, motion, MotionConfig } from "framer-motion";
+ import Navbar from "./components/Navbar";
+ import Footer from "./components/Footer";
+ import ScrollToTop from "./components/ScrollToTop";
++import CookieConsent from "./components/CookieConsent";
++import ExitIntentModal from "./components/ExitIntentModal";
+ import Home from "./pages/Home";
+ import About from "./pages/About";
+ import Trainers from "./pages/Trainers";
+@@ -10,6 +13,8 @@ import Programs from "./pages/Programs";
+ import Pricing from "./pages/Pricing";
+ import Gallery from "./pages/Gallery";
+ import Contact from "./pages/Contact";
++import Admin from "./pages/Admin";
++import { trackVisit } from "./utils/tracking";
+ 
+ function PageWrapper({ children }) {
+   return (
+@@ -26,6 +31,22 @@ function PageWrapper({ children }) {
+ 
+ export default function App() {
+   const location = useLocation();
++  const isAdmin = location.pathname.startsWith("/admin");
++
++  // One page-view beacon per route change (consent-gated inside trackVisit).
++  useEffect(() => {
++    if (!isAdmin) trackVisit(location.pathname);
++  }, [location.pathname, isAdmin]);
++
++  if (isAdmin) {
++    // The owner's dashboard is deliberately outside the public chrome —
++    // no navbar/footer/marketing widgets, and it isn't linked from NAV_LINKS.
++    return (
++      <Routes>
++        <Route path="/admin" element={<Admin />} />
++      </Routes>
++    );
++  }
+ 
+   return (
+     <MotionConfig reducedMotion="user">
+@@ -44,6 +65,8 @@ export default function App() {
+           </Routes>
+         </AnimatePresence>
+         <Footer />
++        <ExitIntentModal path={location.pathname} />
++        <CookieConsent />
+       </div>
+     </MotionConfig>
+   );
+diff --git a/client/src/components/CookieConsent.jsx b/client/src/components/CookieConsent.jsx
+new file mode 100644
+index 0000000..6c982f6
+--- /dev/null
++++ b/client/src/components/CookieConsent.jsx
+@@ -0,0 +1,59 @@
++import { useEffect, useState } from "react";
++import { motion, AnimatePresence } from "framer-motion";
++import { Cookie } from "lucide-react";
++import { getCookieConsent, setCookieConsent } from "../utils/tracking";
++
++// Sits above everything else — a real choice, not a pre-ticked formality.
++// "Essential only" genuinely disables the analytics/interest-tracking calls
++// (see utils/tracking.js), it isn't just cosmetic.
++export default function CookieConsent() {
++  const [visible, setVisible] = useState(false);
++
++  useEffect(() => {
++    if (!getCookieConsent()) setVisible(true);
++  }, []);
++
++  const choose = (value) => {
++    setCookieConsent(value);
++    setVisible(false);
++  };
++
++  return (
++    <AnimatePresence>
++      {visible && (
++        <motion.div
++          initial={{ y: 100, opacity: 0 }}
++          animate={{ y: 0, opacity: 1 }}
++          exit={{ y: 100, opacity: 0 }}
++          transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
++          className="fixed inset-x-0 bottom-0 z-[95] border-t border-line-strong bg-ink/95 backdrop-blur-md"
++        >
++          <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-8">
++            <div className="flex gap-3">
++              <Cookie size={20} className="mt-0.5 shrink-0 text-plate-yellow" />
++              <p className="text-sm leading-relaxed text-chalk-dim">
++                We use a first-party cookie to remember your visit and follow up on
++                enquiries you've asked us about — no third-party ad trackers, nothing
++                sold on. See what you looked at helps us reply faster, not slower.
++              </p>
++            </div>
++            <div className="flex shrink-0 gap-3">
++              <button
++                onClick={() => choose("essential-only")}
++                className="text-stencil border border-line-strong px-4 py-2.5 text-xs font-bold tracking-[0.1em] text-chalk-dim transition-colors hover:border-chalk hover:text-chalk"
++              >
++                Essential Only
++              </button>
++              <button
++                onClick={() => choose("accepted")}
++                className="text-stencil bg-plate-red px-4 py-2.5 text-xs font-bold tracking-[0.1em] text-chalk transition-colors hover:bg-plate-red-dim"
++              >
++                Accept
++              </button>
++            </div>
++          </div>
++        </motion.div>
++      )}
++    </AnimatePresence>
++  );
++}
+diff --git a/client/src/components/ExitIntentModal.jsx b/client/src/components/ExitIntentModal.jsx
+new file mode 100644
+index 0000000..1dc91fe
+--- /dev/null
++++ b/client/src/components/ExitIntentModal.jsx
+@@ -0,0 +1,158 @@
++import { useEffect, useState, useRef } from "react";
++import { motion, AnimatePresence } from "framer-motion";
++import { X, Flame, CheckCircle2 } from "lucide-react";
++import { FREE_DEMO } from "../data/siteData";
++import { submitWhatsappOptIn, trackEvent } from "../utils/tracking";
++
++const SESSION_FLAG = "xfg_exit_intent_shown";
++// Skip the modal on pages where it'd interrupt someone already mid-task.
++const EXCLUDED_PATHS = ["/contact"];
++
++export default function ExitIntentModal({ path }) {
++  const [open, setOpen] = useState(false);
++  const [phone, setPhone] = useState("");
++  const [status, setStatus] = useState("idle");
++  const armedRef = useRef(false);
++
++  useEffect(() => {
++    if (EXCLUDED_PATHS.includes(path)) return;
++    if (sessionStorage.getItem(SESSION_FLAG)) return;
++
++    // Give the page a few seconds before arming — an exit-intent that can
++    // fire the instant someone lands is just an ambush, not a signal.
++    const armTimer = setTimeout(() => {
++      armedRef.current = true;
++    }, 6000);
++
++    const showOnce = () => {
++      if (!armedRef.current || sessionStorage.getItem(SESSION_FLAG)) return;
++      sessionStorage.setItem(SESSION_FLAG, "1");
++      setOpen(true);
++      trackEvent("exit_intent_shown");
++    };
++
++    // Desktop: cursor leaving toward the top of the viewport.
++    const handleMouseLeave = (e) => {
++      if (e.clientY <= 0) showOnce();
++    };
++    document.addEventListener("mouseleave", handleMouseLeave);
++
++    // Mobile has no mouse-leave signal — fall back to a longer dwell timer,
++    // so it's still a "you've been reading a while" prompt, not a popup war.
++    const isTouchDevice = "ontouchstart" in window;
++    const mobileTimer = isTouchDevice ? setTimeout(showOnce, 45000) : null;
++
++    return () => {
++      clearTimeout(armTimer);
++      if (mobileTimer) clearTimeout(mobileTimer);
++      document.removeEventListener("mouseleave", handleMouseLeave);
++    };
++  }, [path]);
++
++  const close = () => setOpen(false);
++
++  const handleSubmit = async (e) => {
++    e.preventDefault();
++    setStatus("loading");
++    const ok = await submitWhatsappOptIn({
++      phone,
++      source: "exit_intent",
++      wantsDemo: true,
++      message: "Requested free demo details via exit-intent popup",
++    });
++    if (ok) {
++      setStatus("success");
++      trackEvent("exit_intent_submitted");
++    } else {
++      setStatus("error");
++    }
++  };
++
++  return (
++    <AnimatePresence>
++      {open && (
++        <motion.div
++          initial={{ opacity: 0 }}
++          animate={{ opacity: 1 }}
++          exit={{ opacity: 0 }}
++          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 px-5 backdrop-blur-sm"
++          onClick={close}
++        >
++          <motion.div
++            initial={{ opacity: 0, scale: 0.92, y: 16 }}
++            animate={{ opacity: 1, scale: 1, y: 0 }}
++            exit={{ opacity: 0, scale: 0.95 }}
++            transition={{ type: "spring", bounce: 0.25, duration: 0.5 }}
++            onClick={(e) => e.stopPropagation()}
++            className="relative w-full max-w-md border border-line-strong bg-panel p-8 shadow-[0_20px_60px_rgba(0,0,0,0.6)]"
++          >
++            <button
++              onClick={close}
++              aria-label="Close"
++              className="absolute right-4 top-4 text-steel-dim transition-colors hover:text-chalk"
++            >
++              <X size={20} />
++            </button>
++
++            {status === "success" ? (
++              <div className="flex flex-col items-center gap-3 py-6 text-center">
++                <CheckCircle2 size={36} className="text-plate-yellow" />
++                <h3 className="text-display text-xl">You're on the list.</h3>
++                <p className="text-sm text-steel">
++                  We'll message you on WhatsApp with your {FREE_DEMO.short.toLowerCase()} details shortly.
++                </p>
++              </div>
++            ) : (
++              <>
++                <div className="mb-1 flex items-center gap-2 text-plate-red">
++                  <Flame size={18} strokeWidth={2.5} />
++                  <span className="text-stencil text-xs font-bold tracking-[0.12em]">
++                    BEFORE YOU GO
++                  </span>
++                </div>
++                <h3 className="text-display text-2xl leading-tight">
++                  Grab your {FREE_DEMO.short.toLowerCase()}.
++                </h3>
++                <p className="mt-2 text-sm leading-relaxed text-steel">
++                  Drop your number and we'll send the details straight to WhatsApp — no
++                  card, no commitment, just a full session on the floor.
++                </p>
++
++                <form onSubmit={handleSubmit} className="mt-5 flex flex-col gap-3">
++                  <input
++                    type="tel"
++                    inputMode="numeric"
++                    required
++                    pattern="[6-9][0-9]{9}"
++                    maxLength={10}
++                    value={phone}
++                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
++                    placeholder="10-digit mobile number"
++                    className="w-full border border-line-strong bg-panel-2 px-4 py-3.5 text-chalk placeholder:text-steel-dim outline-none transition-colors focus:border-plate-red focus:ring-1 focus:ring-plate-red/30"
++                  />
++                  <motion.button
++                    whileTap={{ scale: 0.97 }}
++                    type="submit"
++                    disabled={status === "loading"}
++                    className="text-stencil bg-plate-red px-6 py-3.5 text-sm font-bold tracking-[0.1em] text-chalk transition-colors hover:bg-plate-red-dim disabled:opacity-60"
++                  >
++                    {status === "loading" ? "Sending..." : "Send My Demo Details"}
++                  </motion.button>
++                  <p className="text-center text-[0.7rem] leading-relaxed text-steel-dim">
++                    By submitting, you agree to receive your demo details and a couple of
++                    follow-up messages on WhatsApp. Reply STOP anytime to opt out.
++                  </p>
++                  {status === "error" && (
++                    <p className="text-center text-xs text-plate-red">
++                      Couldn't send that — try the WhatsApp button in the corner instead.
++                    </p>
++                  )}
++                </form>
++              </>
++            )}
++          </motion.div>
++        </motion.div>
++      )}
++    </AnimatePresence>
++  );
++}
+diff --git a/client/src/components/NearbyBanner.jsx b/client/src/components/NearbyBanner.jsx
+new file mode 100644
+index 0000000..94fec8e
+--- /dev/null
++++ b/client/src/components/NearbyBanner.jsx
+@@ -0,0 +1,132 @@
++import { useState } from "react";
++import { motion, AnimatePresence } from "framer-motion";
++import { MapPin, Send, CheckCircle2 } from "lucide-react";
++import { GYM } from "../data/siteData";
++import { checkProximity, submitWhatsappOptIn, trackEvent } from "../utils/tracking";
++
++// Entirely user-initiated: nothing here runs until the visitor presses the
++// button, which is what triggers both the browser's own location-permission
++// prompt AND the consent flag sent to the server (see utils/tracking.js).
++// No location is requested or stored passively on page load.
++export default function NearbyBanner() {
++  const [state, setState] = useState("idle"); // idle | checking | near | far | denied
++  const [distanceKm, setDistanceKm] = useState(null);
++  const [phone, setPhone] = useState("");
++  const [sent, setSent] = useState(false);
++
++  const handleCheck = () => {
++    if (!navigator.geolocation) {
++      setState("denied");
++      return;
++    }
++    setState("checking");
++    navigator.geolocation.getCurrentPosition(
++      async (pos) => {
++        const result = await checkProximity(pos.coords.latitude, pos.coords.longitude);
++        if (!result) {
++          setState("denied");
++          return;
++        }
++        setDistanceKm(result.distanceKm);
++        setState(result.near ? "near" : "far");
++      },
++      () => setState("denied"),
++      { timeout: 8000 }
++    );
++  };
++
++  const handleSend = async (e) => {
++    e.preventDefault();
++    const ok = await submitWhatsappOptIn({
++      phone,
++      source: "nearby_banner",
++      wantsDemo: true,
++      message: `Nearby visitor (${distanceKm}km) requested directions/demo info`,
++    });
++    if (ok) {
++      setSent(true);
++      trackEvent("nearby_optin_submitted", { distanceKm });
++    }
++  };
++
++  if (state === "idle") {
++    return (
++      <button
++        onClick={handleCheck}
++        className="text-stencil group inline-flex items-center gap-2 border border-line-strong px-4 py-2.5 text-xs font-bold tracking-[0.1em] text-chalk-dim transition-colors hover:border-plate-yellow hover:text-chalk"
++      >
++        <MapPin size={14} className="text-plate-yellow" />
++        How Close Am I?
++      </button>
++    );
++  }
++
++  if (state === "checking") {
++    return <p className="text-sm text-steel-dim">Checking your distance…</p>;
++  }
++
++  if (state === "denied") {
++    return (
++      <p className="text-sm text-steel-dim">
++        Couldn't get your location — you can still find us via the map below.
++      </p>
++    );
++  }
++
++  return (
++    <AnimatePresence mode="wait">
++      <motion.div
++        key={state}
++        initial={{ opacity: 0, y: 8 }}
++        animate={{ opacity: 1, y: 0 }}
++        className="border border-line-strong bg-panel p-5"
++      >
++        {state === "near" && !sent && (
++          <>
++            <p className="flex items-center gap-2 text-sm font-semibold text-chalk">
++              <MapPin size={16} className="text-plate-yellow" />
++              You're only {distanceKm} km away — closer than you thought.
++            </p>
++            <p className="mt-1.5 text-sm text-steel">
++              Swing by any open hour ({GYM.hours}, {GYM.days}), or get the address and free
++              demo details sent straight to WhatsApp:
++            </p>
++            <form onSubmit={handleSend} className="mt-3 flex flex-col gap-2.5 sm:flex-row">
++              <input
++                type="tel"
++                inputMode="numeric"
++                required
++                pattern="[6-9][0-9]{9}"
++                maxLength={10}
++                value={phone}
++                onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
++                placeholder="10-digit mobile number"
++                className="flex-1 border border-line-strong bg-panel-2 px-4 py-2.5 text-sm text-chalk placeholder:text-steel-dim outline-none focus:border-plate-red focus:ring-1 focus:ring-plate-red/30"
++              />
++              <button
++                type="submit"
++                className="text-stencil flex items-center justify-center gap-2 bg-plate-red px-4 py-2.5 text-xs font-bold tracking-[0.1em] text-chalk transition-colors hover:bg-plate-red-dim"
++              >
++                Text Me <Send size={14} />
++              </button>
++            </form>
++            <p className="mt-2 text-[0.7rem] text-steel-dim">
++              By submitting, you agree to receive this on WhatsApp. Reply STOP anytime.
++            </p>
++          </>
++        )}
++        {state === "near" && sent && (
++          <p className="flex items-center gap-2 text-sm text-plate-yellow">
++            <CheckCircle2 size={16} /> Sent — check WhatsApp shortly.
++          </p>
++        )}
++        {state === "far" && (
++          <p className="flex items-center gap-2 text-sm text-steel">
++            <MapPin size={16} className="text-steel-dim" />
++            You're {distanceKm} km away — still an easy trip on the days you train.
++          </p>
++        )}
++      </motion.div>
++    </AnimatePresence>
++  );
++}
+diff --git a/client/src/data/siteData.js b/client/src/data/siteData.js
+index fb1b74c..7c8afe0 100644
+--- a/client/src/data/siteData.js
++++ b/client/src/data/siteData.js
+@@ -80,9 +80,9 @@ export const GYM = {
+   name: "Xtreme Fitness Gym",
+   tagline: "Train Like It Costs More.",
+   subTagline: "International powerlifting coaches. Air-conditioned floor. Honest pricing.",
+-  phone: "+91 97114 03248", // pulled from the gym's public Google Business listing — confirm this is current
++  phone: "+91 79826 09569",
+   email: "hello@xtremefitnessgym.in", // TODO: replace with real email
+-  whatsapp: "https://wa.me/919711403248",
++  whatsapp: "https://wa.me/917982609569",
+   hours: "5:00 AM – 10:00 PM",
+   days: "Monday – Saturday",
+   closedNote: "Closed Sundays",
+@@ -92,6 +92,7 @@ export const GYM = {
+     mapsShareUrl: "https://share.google/VYMzK8u07tUKEAclV",
+     mapsEmbedQuery: "Xtreme Fitness Gym, B-4 Pankha Road, Raghu Nagar, Dabri, New Delhi 110045",
+     placeId: "ChIJlVKbEOgbDTkRagcWRBXfRqc",
++    coordinates: { lat: 28.6112664, lng: 77.0908111 },
+   },
+ };
+ 
+diff --git a/client/src/pages/Admin.jsx b/client/src/pages/Admin.jsx
+new file mode 100644
+index 0000000..9b85fde
+--- /dev/null
++++ b/client/src/pages/Admin.jsx
+@@ -0,0 +1,258 @@
++import { useEffect, useState, useCallback } from "react";
++import { Lock, RefreshCw, Zap, ExternalLink } from "lucide-react";
++import { API_BASE_URL, GYM } from "../data/siteData";
++
++const KEY_STORAGE = "xfg_admin_key";
++
++const STATUS_OPTIONS = ["new", "contacted", "demo_booked", "converted", "lost"];
++
++function StatCard({ label, value }) {
++  return (
++    <div className="border border-line bg-panel px-5 py-4">
++      <p className="text-stencil text-[0.65rem] font-bold tracking-[0.1em] text-steel-dim">{label}</p>
++      <p className="text-display mt-1 text-3xl text-chalk">{value}</p>
++    </div>
++  );
++}
++
++function ScoreBadge({ score }) {
++  const hot = score >= 20;
++  const warm = score >= 8;
++  const color = hot ? "text-plate-red" : warm ? "text-plate-yellow" : "text-steel-dim";
++  return <span className={`font-bold ${color}`}>{score}</span>;
++}
++
++export default function Admin() {
++  const [adminKey, setAdminKey] = useState(() => sessionStorage.getItem(KEY_STORAGE) || "");
++  const [keyInput, setKeyInput] = useState("");
++  const [authError, setAuthError] = useState("");
++  const [leads, setLeads] = useState([]);
++  const [stats, setStats] = useState(null);
++  const [loading, setLoading] = useState(false);
++  const [statusFilter, setStatusFilter] = useState("");
++  const [sort, setSort] = useState("interest");
++  const [runningAutomation, setRunningAutomation] = useState(false);
++
++  const authedFetch = useCallback(
++    async (path, options = {}) => {
++      const res = await fetch(`${API_BASE_URL}${path}`, {
++        ...options,
++        headers: { ...(options.headers || {}), "x-admin-key": adminKey },
++      });
++      if (res.status === 401 || res.status === 503) {
++        const body = await res.json().catch(() => ({}));
++        setAuthError(body.error || "Access denied.");
++        sessionStorage.removeItem(KEY_STORAGE);
++        setAdminKey("");
++        return null;
++      }
++      return res;
++    },
++    [adminKey]
++  );
++
++  const loadData = useCallback(async () => {
++    if (!adminKey) return;
++    setLoading(true);
++    const params = new URLSearchParams({ sort, ...(statusFilter && { status: statusFilter }) });
++    const [leadsRes, statsRes] = await Promise.all([
++      authedFetch(`/api/leads?${params}`),
++      authedFetch(`/api/leads/stats`),
++    ]);
++    if (leadsRes?.ok) setLeads((await leadsRes.json()).leads);
++    if (statsRes?.ok) setStats(await statsRes.json());
++    setLoading(false);
++  }, [adminKey, sort, statusFilter, authedFetch]);
++
++  useEffect(() => {
++    loadData();
++  }, [loadData]);
++
++  const handleKeySubmit = (e) => {
++    e.preventDefault();
++    setAuthError("");
++    sessionStorage.setItem(KEY_STORAGE, keyInput);
++    setAdminKey(keyInput);
++  };
++
++  const updateLead = async (id, patch) => {
++    setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
++    await authedFetch(`/api/leads/${id}`, {
++      method: "PATCH",
++      headers: { "Content-Type": "application/json" },
++      body: JSON.stringify(patch),
++    });
++  };
++
++  const runAutomationNow = async () => {
++    setRunningAutomation(true);
++    await authedFetch(`/api/leads/automation/run-now`, { method: "POST" });
++    await loadData();
++    setRunningAutomation(false);
++  };
++
++  if (!adminKey) {
++    return (
++      <div className="flex min-h-screen items-center justify-center bg-ink px-5">
++        <form
++          onSubmit={handleKeySubmit}
++          className="w-full max-w-sm border border-line-strong bg-panel p-8"
++        >
++          <div className="mb-4 flex items-center gap-2 text-plate-yellow">
++            <Lock size={18} />
++            <span className="text-stencil text-xs font-bold tracking-[0.1em]">ADMIN ACCESS</span>
++          </div>
++          <h1 className="text-display text-2xl text-chalk">{GYM.name} — Leads</h1>
++          <input
++            type="password"
++            value={keyInput}
++            onChange={(e) => setKeyInput(e.target.value)}
++            placeholder="Admin key"
++            autoFocus
++            className="mt-5 w-full border border-line-strong bg-panel-2 px-4 py-3 text-chalk outline-none focus:border-plate-red"
++          />
++          {authError && <p className="mt-2 text-xs text-plate-red">{authError}</p>}
++          <button
++            type="submit"
++            className="text-stencil mt-4 w-full bg-plate-red py-3 text-sm font-bold tracking-[0.1em] text-chalk transition-colors hover:bg-plate-red-dim"
++          >
++            Enter
++          </button>
++          <p className="mt-4 text-xs text-steel-dim">
++            Set with <code className="text-steel">ADMIN_API_KEY</code> in server/.env.
++          </p>
++        </form>
++      </div>
++    );
++  }
++
++  return (
++    <div className="min-h-screen bg-ink px-5 py-10 text-chalk sm:px-8">
++      <div className="mx-auto max-w-7xl">
++        <div className="flex flex-wrap items-center justify-between gap-4">
++          <h1 className="text-display text-3xl">Leads Dashboard</h1>
++          <div className="flex gap-3">
++            <button
++              onClick={loadData}
++              className="text-stencil flex items-center gap-2 border border-line-strong px-4 py-2.5 text-xs font-bold tracking-[0.1em] text-chalk-dim hover:border-chalk hover:text-chalk"
++            >
++              <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Refresh
++            </button>
++            <button
++              onClick={runAutomationNow}
++              disabled={runningAutomation}
++              className="text-stencil flex items-center gap-2 bg-plate-red px-4 py-2.5 text-xs font-bold tracking-[0.1em] text-chalk hover:bg-plate-red-dim disabled:opacity-60"
++            >
++              <Zap size={14} /> {runningAutomation ? "Running..." : "Run Automation Now"}
++            </button>
++          </div>
++        </div>
++
++        {stats && (
++          <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
++            <StatCard label="Total Leads" value={stats.totalLeads} />
++            <StatCard label="Site Visitors" value={stats.totalVisitors} />
++            <StatCard label="WhatsApp Opted-In" value={stats.optedInWhatsApp} />
++            <StatCard label="Converted" value={stats.converted} />
++          </div>
++        )}
++
++        <div className="mt-8 flex flex-wrap items-center gap-3">
++          <select
++            value={statusFilter}
++            onChange={(e) => setStatusFilter(e.target.value)}
++            className="border border-line-strong bg-panel-2 px-3 py-2 text-sm text-chalk"
++          >
++            <option value="">All statuses</option>
++            {STATUS_OPTIONS.map((s) => (
++              <option key={s} value={s}>{s}</option>
++            ))}
++          </select>
++          <select
++            value={sort}
++            onChange={(e) => setSort(e.target.value)}
++            className="border border-line-strong bg-panel-2 px-3 py-2 text-sm text-chalk"
++          >
++            <option value="interest">Sort: Hottest first</option>
++            <option value="recent">Sort: Most recent</option>
++          </select>
++        </div>
++
++        <div className="mt-4 overflow-x-auto border border-line">
++          <table className="w-full min-w-[900px] text-left text-sm">
++            <thead>
++              <tr className="border-b border-line bg-panel text-stencil text-[0.65rem] font-bold tracking-[0.08em] text-steel-dim">
++                <th className="px-4 py-3">Lead</th>
++                <th className="px-4 py-3">Source</th>
++                <th className="px-4 py-3">Score</th>
++                <th className="px-4 py-3">WhatsApp</th>
++                <th className="px-4 py-3">Last Seen</th>
++                <th className="px-4 py-3">Status</th>
++                <th className="px-4 py-3">Notes</th>
++              </tr>
++            </thead>
++            <tbody>
++              {leads.map((lead) => (
++                <tr key={lead.id} className="border-b border-line/60 align-top">
++                  <td className="px-4 py-3">
++                    <p className="font-semibold text-chalk">{lead.name || "—"}</p>
++                    <a
++                      href={`https://wa.me/91${lead.phone}`}
++                      target="_blank"
++                      rel="noreferrer"
++                      className="inline-flex items-center gap-1 text-xs text-steel hover:text-plate-yellow"
++                    >
++                      {lead.phone} <ExternalLink size={11} />
++                    </a>
++                  </td>
++                  <td className="px-4 py-3 text-xs text-steel">{lead.source}</td>
++                  <td className="px-4 py-3"><ScoreBadge score={lead.interestScore} /></td>
++                  <td className="px-4 py-3 text-xs">
++                    {lead.optedInWhatsApp ? (
++                      lead.whatsappOptOut ? (
++                        <span className="text-steel-dim">Opted out</span>
++                      ) : (
++                        <span className="text-[#25D366]">Opted in</span>
++                      )
++                    ) : (
++                      <span className="text-steel-dim">No</span>
++                    )}
++                  </td>
++                  <td className="px-4 py-3 text-xs text-steel">
++                    {new Date(lead.lastSeenAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
++                  </td>
++                  <td className="px-4 py-3">
++                    <select
++                      value={lead.status}
++                      onChange={(e) => updateLead(lead.id, { status: e.target.value })}
++                      className="border border-line-strong bg-panel-2 px-2 py-1.5 text-xs text-chalk"
++                    >
++                      {STATUS_OPTIONS.map((s) => (
++                        <option key={s} value={s}>{s}</option>
++                      ))}
++                    </select>
++                  </td>
++                  <td className="px-4 py-3">
++                    <input
++                      defaultValue={lead.notes}
++                      onBlur={(e) => updateLead(lead.id, { notes: e.target.value })}
++                      placeholder="Add a note..."
++                      className="w-full min-w-[160px] border border-transparent bg-transparent px-2 py-1.5 text-xs text-steel outline-none focus:border-line-strong"
++                    />
++                  </td>
++                </tr>
++              ))}
++              {!leads.length && !loading && (
++                <tr>
++                  <td colSpan={7} className="px-4 py-10 text-center text-sm text-steel-dim">
++                    No leads yet.
++                  </td>
++                </tr>
++              )}
++            </tbody>
++          </table>
++        </div>
++      </div>
++    </div>
++  );
++}
+diff --git a/client/src/pages/Contact.jsx b/client/src/pages/Contact.jsx
+index 249a9d4..da2af8d 100644
+--- a/client/src/pages/Contact.jsx
++++ b/client/src/pages/Contact.jsx
+@@ -3,9 +3,11 @@ import { motion } from "framer-motion";
+ import { MapPin, Clock, Phone, Mail, Send, CheckCircle2, AlertCircle, Flame, MessageCircle, Star } from "lucide-react";
+ import SectionHeading from "../components/SectionHeading";
+ import Reveal from "../components/Reveal";
++import NearbyBanner from "../components/NearbyBanner";
+ import { GYM, API_BASE_URL, FREE_DEMO } from "../data/siteData";
++import { submitWhatsappOptIn } from "../utils/tracking";
+ 
+-const initialForm = { name: "", phone: "", message: "", wantsDemo: false };
++const initialForm = { name: "", phone: "", message: "", wantsDemo: false, wantsWhatsappUpdates: false };
+ 
+ export default function Contact() {
+   const [form, setForm] = useState(initialForm);
+@@ -33,6 +35,19 @@ export default function Contact() {
+         body: JSON.stringify({ name: form.name, phone: form.phone, message }),
+       });
+       if (!res.ok) throw new Error("Request failed");
++
++      // Separate, explicit opt-in — booking a demo doesn't by itself sign
++      // someone up for ongoing WhatsApp marketing messages.
++      if (form.wantsWhatsappUpdates) {
++        await submitWhatsappOptIn({
++          name: form.name,
++          phone: form.phone,
++          source: "contact_form",
++          wantsDemo: form.wantsDemo,
++          message,
++        });
++      }
++
+       setStatus("success");
+       setForm(initialForm);
+     } catch {
+@@ -141,6 +156,13 @@ export default function Contact() {
+               </div>
+             </div>
+           </div>
++
++          <div className="border border-line bg-panel p-5">
++            <p className="text-stencil mb-3 text-xs font-bold text-chalk-dim">
++              Coming from work or home?
++            </p>
++            <NearbyBanner />
++          </div>
+         </Reveal>
+ 
+         <Reveal delay={0.1} className="mt-10 border border-line bg-panel p-7 sm:p-10 lg:mt-0">
+@@ -244,6 +266,28 @@ export default function Contact() {
+               </span>
+             </label>
+ 
++            <label
++              htmlFor="wantsWhatsappUpdates"
++              className="group flex cursor-pointer items-start gap-3 border border-line-strong px-4 py-3.5 transition-colors hover:border-chalk"
++            >
++              <input
++                id="wantsWhatsappUpdates"
++                name="wantsWhatsappUpdates"
++                type="checkbox"
++                checked={form.wantsWhatsappUpdates}
++                onChange={(e) => setForm((f) => ({ ...f, wantsWhatsappUpdates: e.target.checked }))}
++                className="mt-0.5 h-4 w-4 shrink-0 accent-[#25D366] cursor-pointer"
++              />
++              <span className="text-sm text-chalk-dim">
++                <span className="inline-flex items-center gap-1.5 font-semibold text-chalk">
++                  <MessageCircle size={14} className="text-[#25D366]" />
++                  Also message me updates &amp; demo reminders on WhatsApp
++                </span>
++                <br />
++                A few helpful nudges, never spam — reply STOP anytime to opt out.
++              </span>
++            </label>
++
+             <motion.button
+               whileTap={{ scale: 0.97 }}
+               type="submit"
+diff --git a/client/src/utils/tracking.js b/client/src/utils/tracking.js
+new file mode 100644
+index 0000000..d7b3899
+--- /dev/null
++++ b/client/src/utils/tracking.js
+@@ -0,0 +1,96 @@
++// First-party visitor tracking. No third-party ad pixels, nothing sold to
++// anyone — this exists so the gym owner can see which pages a lead looked
++// at before calling them back, and to power the (consent-gated, see below)
++// "you're nearby" banner. Talks to the server's /api/track/* routes, which
++// read/write the httpOnly xfg_vid cookie (see server/src/middleware/visitor.js).
++import { API_BASE_URL } from "../data/siteData";
++
++const CONSENT_KEY = "xfg_cookie_consent"; // "accepted" | "essential-only"
++const UTM_KEY = "xfg_utm";
++
++export function getCookieConsent() {
++  return localStorage.getItem(CONSENT_KEY);
++}
++
++export function setCookieConsent(value) {
++  localStorage.setItem(CONSENT_KEY, value);
++}
++
++// First-touch UTM attribution: capture ?utm_source=... once, then keep
++// reusing it for the rest of the session even once the visitor has clicked
++// through to a URL without those params.
++function getUtm() {
++  const params = new URLSearchParams(window.location.search);
++  const fromUrl = {
++    source: params.get("utm_source") || undefined,
++    medium: params.get("utm_medium") || undefined,
++    campaign: params.get("utm_campaign") || undefined,
++  };
++  if (Object.values(fromUrl).some(Boolean)) {
++    sessionStorage.setItem(UTM_KEY, JSON.stringify(fromUrl));
++    return fromUrl;
++  }
++  try {
++    return JSON.parse(sessionStorage.getItem(UTM_KEY) || "{}");
++  } catch {
++    return {};
++  }
++}
++
++async function post(path, body) {
++  try {
++    await fetch(`${API_BASE_URL}${path}`, {
++      method: "POST",
++      credentials: "include",
++      headers: { "Content-Type": "application/json" },
++      body: JSON.stringify(body || {}),
++    });
++  } catch {
++    // Tracking is best-effort and must never break the site for the user.
++  }
++}
++
++// Non-essential (analytics/marketing) — gated on cookie consent.
++export function trackVisit(path) {
++  if (getCookieConsent() === "essential-only") return;
++  post("/api/track/visit", { path, referrer: document.referrer, utm: getUtm() });
++}
++
++export function trackEvent(type, meta) {
++  if (getCookieConsent() === "essential-only") return;
++  post("/api/track/event", { type, meta });
++}
++
++// Geolocation is opt-in per call (a button press, never on page load) and
++// the consent:true flag mirrors the explicit action that triggered it —
++// see NearbyBanner.jsx. Returns { near, distanceKm } or null on failure.
++export async function checkProximity(lat, lng) {
++  try {
++    const res = await fetch(`${API_BASE_URL}/api/track/geo`, {
++      method: "POST",
++      credentials: "include",
++      headers: { "Content-Type": "application/json" },
++      body: JSON.stringify({ lat, lng, consent: true }),
++    });
++    if (!res.ok) return null;
++    return await res.json();
++  } catch {
++    return null;
++  }
++}
++
++// Submits a phone number as a WhatsApp-marketing opt-in — the one path that
++// enrolls someone in the automated follow-up sequence (server-side).
++export async function submitWhatsappOptIn({ name, phone, source, wantsDemo, message }) {
++  try {
++    const res = await fetch(`${API_BASE_URL}/api/whatsapp/opt-in`, {
++      method: "POST",
++      credentials: "include",
++      headers: { "Content-Type": "application/json" },
++      body: JSON.stringify({ name, phone, source, wantsDemo, message }),
++    });
++    return res.ok;
++  } catch {
++    return false;
++  }
++}
+diff --git a/server/.env.example b/server/.env.example
+index f4e09b9..f62796a 100644
+--- a/server/.env.example
++++ b/server/.env.example
+@@ -1,2 +1,41 @@
+ PORT=4000
+ CLIENT_ORIGIN=http://localhost:5173
++
++# --- Admin dashboard ---
++# Sent as an `x-admin-key` header from client/src/pages/Admin.jsx.
++# Change this to a real secret before deploying.
++ADMIN_API_KEY=change-me-before-deploy
++
++# --- Geo-proximity ("near you") feature ---
++# Xtreme Fitness Gym, B-4 Pankha Rd, Dabri, New Delhi (from the Google listing).
++GYM_LAT=28.6112664
++GYM_LNG=77.0908111
++# Visitors within this radius get the "you're nearby" on-site banner.
++GEO_PROXIMITY_KM=5
++
++# --- WhatsApp Business Cloud API (Meta) ---
++# Get these from developers.facebook.com -> your app -> WhatsApp -> API Setup.
++# Leave blank to run in DRY-RUN mode: outbound messages are logged to
++# server/data/db.json (whatsappLog) instead of actually being sent, so the
++# whole automation pipeline (opt-in -> welcome -> drip) is fully testable
++# before you have real Meta credentials.
++WHATSAPP_TOKEN=
++WHATSAPP_PHONE_NUMBER_ID=
++WHATSAPP_API_VERSION=v21.0
++
++# Used by Meta to verify the webhook URL you register in the Meta dashboard.
++# Make this any random string, then enter the SAME string in Meta's console.
++WHATSAPP_VERIFY_TOKEN=change-me-before-deploy
++
++# Approved WhatsApp message *template* names (templates are required for any
++# business-initiated message sent outside the 24h customer-service window --
++# see Meta's WhatsApp Business Platform docs). Create these in Meta Business
++# Manager and get them approved before going live; names here must match
++# exactly. Until they're approved, automation.js just logs a dry-run.
++WHATSAPP_TEMPLATE_DAY1_REMINDER=xfg_demo_reminder
++WHATSAPP_TEMPLATE_DAY3_INCENTIVE=xfg_demo_incentive
++WHATSAPP_TEMPLATE_DAY7_WINBACK=xfg_winback_final
++
++# --- Automation cadence (minutes) ---
++# How often the drip-campaign queue is checked for due sends.
++AUTOMATION_TICK_MINUTES=15
+diff --git a/server/package-lock.json b/server/package-lock.json
+index 9e2faa5..f9a4657 100644
+--- a/server/package-lock.json
++++ b/server/package-lock.json
+@@ -9,10 +9,15 @@
+       "version": "1.0.0",
+       "license": "ISC",
+       "dependencies": {
++        "axios": "^1.7.9",
++        "cookie-parser": "^1.4.7",
+         "cors": "^2.8.6",
+         "dotenv": "^17.4.2",
+         "express": "^5.2.1",
+-        "lowdb": "^7.0.1"
++        "express-rate-limit": "^7.5.0",
++        "helmet": "^8.0.0",
++        "lowdb": "^7.0.1",
++        "node-cron": "^3.0.3"
+       },
+       "devDependencies": {
+         "nodemon": "^3.1.14"
+@@ -31,6 +36,18 @@
+         "node": ">= 0.6"
+       }
+     },
++    "node_modules/agent-base": {
++      "version": "6.0.2",
++      "resolved": "https://registry.npmjs.org/agent-base/-/agent-base-6.0.2.tgz",
++      "integrity": "sha512-RZNwNclF7+MS/8bDg70amg32dyeZGZxiDuQmZxKLAlQjr3jGyLx+4Kkk58UO7D2QdgFIQCovuSuZESne6RG6XQ==",
++      "license": "MIT",
++      "dependencies": {
++        "debug": "4"
++      },
++      "engines": {
++        "node": ">= 6.0.0"
++      }
++    },
+     "node_modules/anymatch": {
+       "version": "3.1.3",
+       "resolved": "https://registry.npmjs.org/anymatch/-/anymatch-3.1.3.tgz",
+@@ -45,6 +62,24 @@
+         "node": ">= 8"
+       }
+     },
++    "node_modules/asynckit": {
++      "version": "0.4.0",
++      "resolved": "https://registry.npmjs.org/asynckit/-/asynckit-0.4.0.tgz",
++      "integrity": "sha512-Oei9OH4tRh0YqU3GxhX79dM/mwVgvbZJaSNaRk+bshkj0S5cfHcgYakreBjrHwatXKbz+IoIdYLxrKim2MjW0Q==",
++      "license": "MIT"
++    },
++    "node_modules/axios": {
++      "version": "1.20.0",
++      "resolved": "https://registry.npmjs.org/axios/-/axios-1.20.0.tgz",
++      "integrity": "sha512-r8aOh8j9cGKpgQAqpzrUHnSIc6a59Y3Xf/cv8sy1DrHCkZHzQGEuoq1tARk6qSyDdtQGSDgpb9kFlruzPvrgwg==",
++      "license": "MIT",
++      "dependencies": {
++        "follow-redirects": "^1.16.0",
++        "form-data": "^4.0.6",
++        "https-proxy-agent": "^5.0.1",
++        "proxy-from-env": "^2.1.0"
++      }
++    },
+     "node_modules/balanced-match": {
+       "version": "4.0.4",
+       "resolved": "https://registry.npmjs.org/balanced-match/-/balanced-match-4.0.4.tgz",
+@@ -194,6 +229,18 @@
+         "fsevents": "~2.3.2"
+       }
+     },
++    "node_modules/combined-stream": {
++      "version": "1.0.8",
++      "resolved": "https://registry.npmjs.org/combined-stream/-/combined-stream-1.0.8.tgz",
++      "integrity": "sha512-FQN4MRfuJeHf7cBbBMJFXhKSDq+2kAArBlmRBvcvFE5BB1HZKXtSFASDhdlz9zOYwxh8lDdnvmMOe/+5cdoEdg==",
++      "license": "MIT",
++      "dependencies": {
++        "delayed-stream": "~1.0.0"
++      },
++      "engines": {
++        "node": ">= 0.8"
++      }
++    },
+     "node_modules/content-disposition": {
+       "version": "1.1.0",
+       "resolved": "https://registry.npmjs.org/content-disposition/-/content-disposition-1.1.0.tgz",
+@@ -225,6 +272,25 @@
+         "node": ">= 0.6"
+       }
+     },
++    "node_modules/cookie-parser": {
++      "version": "1.4.7",
++      "resolved": "https://registry.npmjs.org/cookie-parser/-/cookie-parser-1.4.7.tgz",
++      "integrity": "sha512-nGUvgXnotP3BsjiLX2ypbQnWoGUPIIfHQNZkkC668ntrzGWEZVW70HDEB1qnNGMicPje6EttlIgzo51YSwNQGw==",
++      "license": "MIT",
++      "dependencies": {
++        "cookie": "0.7.2",
++        "cookie-signature": "1.0.6"
++      },
++      "engines": {
++        "node": ">= 0.8.0"
++      }
++    },
++    "node_modules/cookie-parser/node_modules/cookie-signature": {
++      "version": "1.0.6",
++      "resolved": "https://registry.npmjs.org/cookie-signature/-/cookie-signature-1.0.6.tgz",
++      "integrity": "sha512-QADzlaHc8icV8I7vbaJXJwod9HWYp8uCqf1xa4OfNu1T7JVxQIrUgOWtHdNDtPiywmFbiS12VjotIXLrKM3orQ==",
++      "license": "MIT"
++    },
+     "node_modules/cookie-signature": {
+       "version": "1.2.2",
+       "resolved": "https://registry.npmjs.org/cookie-signature/-/cookie-signature-1.2.2.tgz",
+@@ -268,6 +334,15 @@
+         }
+       }
+     },
++    "node_modules/delayed-stream": {
++      "version": "1.0.0",
++      "resolved": "https://registry.npmjs.org/delayed-stream/-/delayed-stream-1.0.0.tgz",
++      "integrity": "sha512-ZySD7Nf91aLB0RxL4KGrKHBXl7Eds1DAmEdcoVawXnLD7SDhpNgtuII2aAkg7a7QS41jxPSZ17p4VdGnMHk3MQ==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=0.4.0"
++      }
++    },
+     "node_modules/depd": {
+       "version": "2.0.0",
+       "resolved": "https://registry.npmjs.org/depd/-/depd-2.0.0.tgz",
+@@ -348,6 +423,21 @@
+         "node": ">= 0.4"
+       }
+     },
++    "node_modules/es-set-tostringtag": {
++      "version": "2.1.0",
++      "resolved": "https://registry.npmjs.org/es-set-tostringtag/-/es-set-tostringtag-2.1.0.tgz",
++      "integrity": "sha512-j6vWzfrGVfyXxge+O0x5sh6cvxAog0a/4Rdd2K36zCMV5eJ+/+tOAngRO8cODMNWbVRdVlmGZQL2YS3yR8bIUA==",
++      "license": "MIT",
++      "dependencies": {
++        "es-errors": "^1.3.0",
++        "get-intrinsic": "^1.2.6",
++        "has-tostringtag": "^1.0.2",
++        "hasown": "^2.0.2"
++      },
++      "engines": {
++        "node": ">= 0.4"
++      }
++    },
+     "node_modules/escape-html": {
+       "version": "1.0.3",
+       "resolved": "https://registry.npmjs.org/escape-html/-/escape-html-1.0.3.tgz",
+@@ -406,6 +496,21 @@
+         "url": "https://opencollective.com/express"
+       }
+     },
++    "node_modules/express-rate-limit": {
++      "version": "7.5.1",
++      "resolved": "https://registry.npmjs.org/express-rate-limit/-/express-rate-limit-7.5.1.tgz",
++      "integrity": "sha512-7iN8iPMDzOMHPUYllBEsQdWVB6fPDMPqwjBaFrgr4Jgr/+okjvzAy+UHlYYL/Vs0OsOrMkwS6PJDkFlJwoxUnw==",
++      "license": "MIT",
++      "engines": {
++        "node": ">= 16"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/express-rate-limit"
++      },
++      "peerDependencies": {
++        "express": ">= 4.11"
++      }
++    },
+     "node_modules/fill-range": {
+       "version": "7.1.1",
+       "resolved": "https://registry.npmjs.org/fill-range/-/fill-range-7.1.1.tgz",
+@@ -440,6 +545,63 @@
+         "url": "https://opencollective.com/express"
+       }
+     },
++    "node_modules/follow-redirects": {
++      "version": "1.16.0",
++      "resolved": "https://registry.npmjs.org/follow-redirects/-/follow-redirects-1.16.0.tgz",
++      "integrity": "sha512-y5rN/uOsadFT/JfYwhxRS5R7Qce+g3zG97+JrtFZlC9klX/W5hD7iiLzScI4nZqUS7DNUdhPgw4xI8W2LuXlUw==",
++      "funding": [
++        {
++          "type": "individual",
++          "url": "https://github.com/sponsors/RubenVerborgh"
++        }
++      ],
++      "license": "MIT",
++      "engines": {
++        "node": ">=4.0"
++      },
++      "peerDependenciesMeta": {
++        "debug": {
++          "optional": true
++        }
++      }
++    },
++    "node_modules/form-data": {
++      "version": "4.0.6",
++      "resolved": "https://registry.npmjs.org/form-data/-/form-data-4.0.6.tgz",
++      "integrity": "sha512-vKatAh4SlVfgbv+YtmhiRjhEMJsYpsG1Y2rMQtR+SVSbytsSD1YGzDIcrAJmdFec88u/+VoGmxnl+80gL1tRCQ==",
++      "license": "MIT",
++      "dependencies": {
++        "asynckit": "^0.4.0",
++        "combined-stream": "^1.0.8",
++        "es-set-tostringtag": "^2.1.0",
++        "hasown": "^2.0.4",
++        "mime-types": "^2.1.35"
++      },
++      "engines": {
++        "node": ">= 6"
++      }
++    },
++    "node_modules/form-data/node_modules/mime-db": {
++      "version": "1.52.0",
++      "resolved": "https://registry.npmjs.org/mime-db/-/mime-db-1.52.0.tgz",
++      "integrity": "sha512-sPU4uV7dYlvtWJxwwxHD0PuihVNiE7TyAbQ5SWxDCB9mUYvOgroQOwYQQOKPJ8CIbE+1ETVlOoK1UC2nU3gYvg==",
++      "license": "MIT",
++      "engines": {
++        "node": ">= 0.6"
++      }
++    },
++    "node_modules/form-data/node_modules/mime-types": {
++      "version": "2.1.35",
++      "resolved": "https://registry.npmjs.org/mime-types/-/mime-types-2.1.35.tgz",
++      "integrity": "sha512-ZDY+bPm5zTTF+YpCrAU9nK0UgICYPT0QtT1NZWFv4s++TNkcgVaT0g6+4R2uI4MjQjzysHB1zxuWL50hzaeXiw==",
++      "license": "MIT",
++      "dependencies": {
++        "mime-db": "1.52.0"
++      },
++      "engines": {
++        "node": ">= 0.6"
++      }
++    },
+     "node_modules/forwarded": {
+       "version": "0.2.0",
+       "resolved": "https://registry.npmjs.org/forwarded/-/forwarded-0.2.0.tgz",
+@@ -566,6 +728,21 @@
+         "url": "https://github.com/sponsors/ljharb"
+       }
+     },
++    "node_modules/has-tostringtag": {
++      "version": "1.0.2",
++      "resolved": "https://registry.npmjs.org/has-tostringtag/-/has-tostringtag-1.0.2.tgz",
++      "integrity": "sha512-NqADB8VjPFLM2V0VvHUewwwsw0ZWBaIdgo+ieHtK3hasLz4qeCRjYcqfB6AQrBggRKppKF8L52/VqdVsO47Dlw==",
++      "license": "MIT",
++      "dependencies": {
++        "has-symbols": "^1.0.3"
++      },
++      "engines": {
++        "node": ">= 0.4"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/ljharb"
++      }
++    },
+     "node_modules/hasown": {
+       "version": "2.0.4",
+       "resolved": "https://registry.npmjs.org/hasown/-/hasown-2.0.4.tgz",
+@@ -578,6 +755,18 @@
+         "node": ">= 0.4"
+       }
+     },
++    "node_modules/helmet": {
++      "version": "8.3.0",
++      "resolved": "https://registry.npmjs.org/helmet/-/helmet-8.3.0.tgz",
++      "integrity": "sha512-Qgpiaws3Sm30Av8Eah6sjMCZZwjlBu+E68rhpCWBshY1lb09HtLwj5GviX0OyQIn+ulUS0iX0AxN5n3tLZzz1w==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=18.0.0"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/EvanHahn"
++      }
++    },
+     "node_modules/http-errors": {
+       "version": "2.0.1",
+       "resolved": "https://registry.npmjs.org/http-errors/-/http-errors-2.0.1.tgz",
+@@ -598,6 +787,19 @@
+         "url": "https://opencollective.com/express"
+       }
+     },
++    "node_modules/https-proxy-agent": {
++      "version": "5.0.1",
++      "resolved": "https://registry.npmjs.org/https-proxy-agent/-/https-proxy-agent-5.0.1.tgz",
++      "integrity": "sha512-dFcAjpTQFgoLMzC2VwU+C/CbS7uRL0lWmxDITmqm7C+7F0Odmj6s9l6alZc6AELXhrnggM2CeWSXHGOdX2YtwA==",
++      "license": "MIT",
++      "dependencies": {
++        "agent-base": "6",
++        "debug": "4"
++      },
++      "engines": {
++        "node": ">= 6"
++      }
++    },
+     "node_modules/iconv-lite": {
+       "version": "0.7.3",
+       "resolved": "https://registry.npmjs.org/iconv-lite/-/iconv-lite-0.7.3.tgz",
+@@ -813,6 +1015,18 @@
+         "url": "https://opencollective.com/express"
+       }
+     },
++    "node_modules/node-cron": {
++      "version": "3.0.3",
++      "resolved": "https://registry.npmjs.org/node-cron/-/node-cron-3.0.3.tgz",
++      "integrity": "sha512-dOal67//nohNgYWb+nWmg5dkFdIwDm8EpeGYMekPMrngV3637lqnX0lbUcCtgibHTz6SEz7DAIjKvKDFYCnO1A==",
++      "license": "ISC",
++      "dependencies": {
++        "uuid": "8.3.2"
++      },
++      "engines": {
++        "node": ">=6.0.0"
++      }
++    },
+     "node_modules/nodemon": {
+       "version": "3.1.14",
+       "resolved": "https://registry.npmjs.org/nodemon/-/nodemon-3.1.14.tgz",
+@@ -939,6 +1153,15 @@
+         "node": ">= 0.10"
+       }
+     },
++    "node_modules/proxy-from-env": {
++      "version": "2.1.0",
++      "resolved": "https://registry.npmjs.org/proxy-from-env/-/proxy-from-env-2.1.0.tgz",
++      "integrity": "sha512-cJ+oHTW1VAEa8cJslgmUZrc+sjRKgAKl3Zyse6+PV38hZe/V6Z14TbCuXcan9F9ghlz4QrFr2c92TNF82UkYHA==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=10"
++      }
++    },
+     "node_modules/pstree.remy": {
+       "version": "1.1.8",
+       "resolved": "https://registry.npmjs.org/pstree.remy/-/pstree.remy-1.1.8.tgz",
+@@ -1287,6 +1510,16 @@
+         "node": ">= 0.8"
+       }
+     },
++    "node_modules/uuid": {
++      "version": "8.3.2",
++      "resolved": "https://registry.npmjs.org/uuid/-/uuid-8.3.2.tgz",
++      "integrity": "sha512-+NYs2QeMWy+GWFOEm9xnn6HCDp0l7QBD7ml8zLUmJ+93Q5NF0NocErnwkTkXVFNiX3/fpC6afS8Dhb/gz7R7eg==",
++      "deprecated": "uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).",
++      "license": "MIT",
++      "bin": {
++        "uuid": "dist/bin/uuid"
++      }
++    },
+     "node_modules/vary": {
+       "version": "1.1.2",
+       "resolved": "https://registry.npmjs.org/vary/-/vary-1.1.2.tgz",
+diff --git a/server/package.json b/server/package.json
+index e628a22..2234ca0 100644
+--- a/server/package.json
++++ b/server/package.json
+@@ -10,10 +10,15 @@
+   },
+   "license": "ISC",
+   "dependencies": {
++    "axios": "^1.7.9",
++    "cookie-parser": "^1.4.7",
+     "cors": "^2.8.6",
+     "dotenv": "^17.4.2",
+     "express": "^5.2.1",
+-    "lowdb": "^7.0.1"
++    "express-rate-limit": "^7.5.0",
++    "helmet": "^8.0.0",
++    "lowdb": "^7.0.1",
++    "node-cron": "^3.0.3"
+   },
+   "devDependencies": {
+     "nodemon": "^3.1.14"
+diff --git a/server/src/constants.js b/server/src/constants.js
+new file mode 100644
+index 0000000..11af77d
+--- /dev/null
++++ b/server/src/constants.js
+@@ -0,0 +1,10 @@
++// Small, server-side mirror of the gym facts client/src/data/siteData.js
++// needs for message copy (WhatsApp templates, welcome text). Kept separate
++// rather than importing across the client/server boundary — these two
++// packages are deployed independently.
++export const GYM = {
++  name: "Xtreme Fitness Gym",
++  hours: "5:00 AM – 10:00 PM",
++  days: "Monday – Saturday",
++  freeDemoShort: "1-Day Free Demo",
++};
+diff --git a/server/src/db.js b/server/src/db.js
+index 9ee5187..e7bea0b 100644
+--- a/server/src/db.js
++++ b/server/src/db.js
+@@ -1,10 +1,44 @@
++import fs from "node:fs";
+ import path from "node:path";
+ import { fileURLToPath } from "node:url";
+ import { JSONFilePreset } from "lowdb/node";
+ 
+ const __dirname = path.dirname(fileURLToPath(import.meta.url));
+-const dbFile = path.join(__dirname, "..", "data", "db.json");
++const dataDir = path.join(__dirname, "..", "data");
++const dbFile = path.join(dataDir, "db.json");
+ 
+-const defaultData = { enquiries: [] };
++// Fresh clones don't have server/data/ yet (it's gitignored, since it's
++// runtime data) — lowdb's atomic writer needs the directory to already
++// exist, so create it up front instead of failing on the first write.
++fs.mkdirSync(dataDir, { recursive: true });
++
++// `enquiries` is the original collection (Contact form submissions).
++// Everything else backs the lead-tracking / marketing-automation layer:
++//   visitors      - anonymous cookie-tracked sessions, pre-identification
++//   leads         - named/phoned people, the CRM record automation acts on
++//   events        - raw interaction log (page views, clicks, geo pings...)
++//   campaignQueue - scheduled WhatsApp follow-ups (see services/automation.js)
++//   whatsappLog   - every outbound/inbound WhatsApp message, for audit + the
++//                   webhook's "did we already message this person" checks
++const defaultData = {
++  enquiries: [],
++  visitors: {},
++  leads: [],
++  events: [],
++  campaignQueue: [],
++  whatsappLog: [],
++};
+ 
+ export const db = await JSONFilePreset(dbFile, defaultData);
++
++// Older copies of db.json (from before the marketing-automation layer was
++// added) only have `enquiries`. Backfill any missing collections in place
++// rather than requiring people to delete their data file.
++let needsWrite = false;
++for (const [key, value] of Object.entries(defaultData)) {
++  if (!(key in db.data)) {
++    db.data[key] = value;
++    needsWrite = true;
++  }
++}
++if (needsWrite) await db.write();
+diff --git a/server/src/index.js b/server/src/index.js
+index b9d57e4..7e1a972 100644
+--- a/server/src/index.js
++++ b/server/src/index.js
+@@ -1,20 +1,47 @@
+ import "dotenv/config";
+ import express from "express";
+ import cors from "cors";
++import helmet from "helmet";
++import cookieParser from "cookie-parser";
++import rateLimit from "express-rate-limit";
+ import enquiryRouter from "./routes/enquiry.js";
++import trackRouter from "./routes/track.js";
++import leadsRouter from "./routes/leads.js";
++import whatsappRouter from "./routes/whatsapp.js";
++import { visitorCookie } from "./middleware/visitor.js";
++import { startAutomationScheduler } from "./services/automation.js";
+ 
+ const app = express();
+ const PORT = process.env.PORT || 4000;
+ const ALLOWED_ORIGIN = process.env.CLIENT_ORIGIN || "http://localhost:5173";
+ 
+-app.use(cors({ origin: ALLOWED_ORIGIN }));
++app.set("trust proxy", 1);
++
++// helmet() adds standard security headers (X-Content-Type-Options,
++// HSTS in prod, etc). CSP is left off here since this is a JSON API, not an
++// HTML-serving app.
++app.use(helmet({ contentSecurityPolicy: false }));
++app.use(cors({ origin: ALLOWED_ORIGIN, credentials: true }));
++app.use(cookieParser());
+ app.use(express.json());
++app.use(visitorCookie);
+ 
+ app.get("/api/health", (_req, res) => {
+   res.json({ ok: true, service: "xtreme-fitness-gym-server", time: new Date().toISOString() });
+ });
+ 
++// Generic protection against form-spam and scraping on the public,
++// user-facing routes. The WhatsApp webhook (Meta -> us) is deliberately not
++// rate-limited here — Meta retries on non-2xx and a strict limit could
++// cause dropped inbound messages.
++const publicLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 120, standardHeaders: true, legacyHeaders: false });
++app.use("/api/enquiry", publicLimiter);
++app.use("/api/track", publicLimiter);
++
+ app.use("/api/enquiry", enquiryRouter);
++app.use("/api/track", trackRouter);
++app.use("/api/leads", leadsRouter);
++app.use("/api/whatsapp", whatsappRouter);
+ 
+ app.use((req, res) => {
+   res.status(404).json({ ok: false, error: "Not found" });
+@@ -29,4 +56,5 @@ app.use((err, req, res, next) => {
+ app.listen(PORT, () => {
+   console.log(`Xtreme Fitness Gym API running on http://localhost:${PORT}`);
+   console.log(`Allowing requests from: ${ALLOWED_ORIGIN}`);
++  startAutomationScheduler();
+ });
+diff --git a/server/src/middleware/adminAuth.js b/server/src/middleware/adminAuth.js
+new file mode 100644
+index 0000000..d64a41e
+--- /dev/null
++++ b/server/src/middleware/adminAuth.js
+@@ -0,0 +1,20 @@
++// Very small gate for the admin/CRM endpoints: the gym owner's dashboard
++// sends the key back as `x-admin-key`. This is intentionally simple (no
++// user accounts, no sessions) since there's a single owner-operator — but
++// it does mean ADMIN_API_KEY in .env must be changed from the example
++// value before this ever goes on a public server.
++export function requireAdmin(req, res, next) {
++  const expected = process.env.ADMIN_API_KEY;
++  const provided = req.get("x-admin-key");
++
++  if (!expected || expected === "change-me-before-deploy") {
++    return res.status(503).json({
++      ok: false,
++      error: "Admin access isn't configured yet — set ADMIN_API_KEY in server/.env.",
++    });
++  }
++  if (provided !== expected) {
++    return res.status(401).json({ ok: false, error: "Invalid or missing admin key." });
++  }
++  next();
++}
+diff --git a/server/src/middleware/visitor.js b/server/src/middleware/visitor.js
+new file mode 100644
+index 0000000..e44ec0d
+--- /dev/null
++++ b/server/src/middleware/visitor.js
+@@ -0,0 +1,25 @@
++import { randomUUID } from "node:crypto";
++
++const COOKIE_NAME = "xfg_vid";
++const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
++
++// Assigns every browser a long-lived, anonymous visitor id (no personal data
++// in the cookie itself — just a random UUID). This is what lets us stitch
++// "viewed pricing 3 times over a week" into one story before we ever know
++// someone's name, and what a lead record gets linked back to once they do
++// hand over their phone number. Purely functional/analytics use, not
++// third-party ad tracking — worth saying so in a cookie-consent banner.
++export function visitorCookie(req, res, next) {
++  let vid = req.cookies?.[COOKIE_NAME];
++  if (!vid) {
++    vid = randomUUID();
++    res.cookie(COOKIE_NAME, vid, {
++      maxAge: ONE_YEAR_MS,
++      httpOnly: true,
++      sameSite: "lax",
++      secure: process.env.NODE_ENV === "production",
++    });
++  }
++  req.visitorId = vid;
++  next();
++}
+diff --git a/server/src/routes/enquiry.js b/server/src/routes/enquiry.js
+index 6974894..c0f98a5 100644
+--- a/server/src/routes/enquiry.js
++++ b/server/src/routes/enquiry.js
+@@ -1,6 +1,8 @@
+ import { Router } from "express";
+ import { randomUUID } from "node:crypto";
+ import { db } from "../db.js";
++import { requireAdmin } from "../middleware/adminAuth.js";
++import { upsertLead } from "../services/leadEngine.js";
+ 
+ const router = Router();
+ 
+@@ -17,7 +19,11 @@ function validateEnquiry(body) {
+   return { errors, data: { name, phone, message } };
+ }
+ 
+-// POST /api/enquiry — create a new enquiry from the contact form
++// POST /api/enquiry — create a new enquiry from the contact form.
++// Every submission also upserts a Lead (this is the main top-of-funnel
++// capture point), so it shows up in the admin dashboard immediately —
++// independent of whether they also ticked the separate WhatsApp opt-in
++// checkbox, which is handled by POST /api/whatsapp/opt-in.
+ router.post("/", async (req, res) => {
+   const { errors, data } = validateEnquiry(req.body || {});
+   if (errors.length) {
+@@ -33,11 +39,23 @@ router.post("/", async (req, res) => {
+   db.data.enquiries.push(enquiry);
+   await db.write();
+ 
++  const wantsDemo = /free demo/i.test(data.message || "");
++  await upsertLead({
++    visitorId: req.visitorId,
++    name: data.name,
++    phone: data.phone,
++    source: "contact_form",
++    message: data.message,
++    wantsDemo,
++  });
++
+   return res.status(201).json({ ok: true, enquiry });
+ });
+ 
+-// GET /api/enquiry — list all enquiries (simple admin view; no auth yet)
+-router.get("/", async (_req, res) => {
++// GET /api/enquiry — list all enquiries. Now admin-key gated (it used to be
++// open, which meant anyone could read every phone number/message ever
++// submitted — worth locking down alongside the new lead-tracking layer).
++router.get("/", requireAdmin, async (_req, res) => {
+   await db.read();
+   const sorted = [...db.data.enquiries].sort(
+     (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+diff --git a/server/src/routes/leads.js b/server/src/routes/leads.js
+new file mode 100644
+index 0000000..a56551d
+--- /dev/null
++++ b/server/src/routes/leads.js
+@@ -0,0 +1,74 @@
++import { Router } from "express";
++import { db } from "../db.js";
++import { requireAdmin } from "../middleware/adminAuth.js";
++import { processDueItems } from "../services/automation.js";
++
++const router = Router();
++router.use(requireAdmin);
++
++// GET /api/leads — the CRM list. Sorted hottest-first by default so the
++// gym owner sees who to call today, not just who signed up most recently.
++router.get("/", async (req, res) => {
++  await db.read();
++  const { status, sort = "interest" } = req.query;
++
++  let leads = [...db.data.leads];
++  if (status) leads = leads.filter((l) => l.status === status);
++
++  leads.sort((a, b) =>
++    sort === "recent"
++      ? new Date(b.lastSeenAt) - new Date(a.lastSeenAt)
++      : b.interestScore - a.interestScore
++  );
++
++  res.json({ ok: true, count: leads.length, leads });
++});
++
++// GET /api/leads/stats — funnel counts for the dashboard header cards.
++router.get("/stats", async (_req, res) => {
++  await db.read();
++  const leads = db.data.leads;
++  const bySource = {};
++  const byStatus = {};
++  for (const l of leads) {
++    bySource[l.source] = (bySource[l.source] || 0) + 1;
++    byStatus[l.status] = (byStatus[l.status] || 0) + 1;
++  }
++  res.json({
++    ok: true,
++    totalLeads: leads.length,
++    totalVisitors: Object.keys(db.data.visitors).length,
++    optedInWhatsApp: leads.filter((l) => l.optedInWhatsApp && !l.whatsappOptOut).length,
++    converted: byStatus.converted || 0,
++    bySource,
++    byStatus,
++  });
++});
++
++// PATCH /api/leads/:id — update status/notes from the dashboard (e.g. mark
++// "demo_booked" after a phone call, or "converted" once they sign up — the
++// automation engine reads `status` too, so marking someone converted also
++// stops the drip queue from bothering them further).
++router.patch("/:id", async (req, res) => {
++  const lead = db.data.leads.find((l) => l.id === req.params.id);
++  if (!lead) return res.status(404).json({ ok: false, error: "Lead not found" });
++
++  const { status, notes, engagedManually } = req.body || {};
++  if (status) lead.status = status;
++  if (typeof notes === "string") lead.notes = notes;
++  if (typeof engagedManually === "boolean") lead.engagedManually = engagedManually;
++  lead.updatedAt = new Date().toISOString();
++
++  await db.write();
++  res.json({ ok: true, lead });
++});
++
++// POST /api/leads/automation/run-now — manual trigger so the owner can test
++// the drip pipeline (or clear a backlog) without waiting for the next cron
++// tick. Same code path the scheduler itself uses.
++router.post("/automation/run-now", async (_req, res) => {
++  await processDueItems();
++  res.json({ ok: true });
++});
++
++export default router;
+diff --git a/server/src/routes/track.js b/server/src/routes/track.js
+new file mode 100644
+index 0000000..cea8f98
+--- /dev/null
++++ b/server/src/routes/track.js
+@@ -0,0 +1,66 @@
++import { Router } from "express";
++import { db } from "../db.js";
++import { distanceKm } from "../utils/geo.js";
++import { recordEvent } from "../services/leadEngine.js";
++
++const router = Router();
++
++// POST /api/track/visit — fired once per route change from the client.
++// Anonymous: keyed only by the xfg_vid cookie, no name/phone attached yet.
++router.post("/visit", async (req, res) => {
++  const { path: pagePath, referrer, utm } = req.body || {};
++  await recordEvent({
++    visitorId: req.visitorId,
++    type: "page_view",
++    meta: { path: pagePath, referrer },
++    utm,
++  });
++  res.json({ ok: true });
++});
++
++// POST /api/track/event — generic interest-signal log (viewed pricing,
++// clicked WhatsApp, watched the intro animation through, etc). See
++// services/leadEngine.js EVENT_WEIGHTS for what each type is worth.
++router.post("/event", async (req, res) => {
++  const { type, meta } = req.body || {};
++  if (!type) return res.status(400).json({ ok: false, error: "type is required" });
++  await recordEvent({ visitorId: req.visitorId, type, meta });
++  res.json({ ok: true });
++});
++
++// POST /api/track/geo — ONLY called client-side after the browser's own
++// geolocation permission prompt has been accepted AND the user has clicked
++// an explicit "show me how close I am" control (see NearbyBanner.jsx) — this
++// endpoint itself also requires body.consent === true as a second, explicit
++// gate. Nothing here messages anyone: it only unlocks the on-site "you're
++// nearby" banner and, if the visitor separately chooses to submit their
++// phone number in that banner, feeds into the normal opt-in flow below.
++router.post("/geo", async (req, res) => {
++  const { lat, lng, consent } = req.body || {};
++  if (!consent) {
++    return res.status(400).json({ ok: false, error: "Location consent is required." });
++  }
++  if (typeof lat !== "number" || typeof lng !== "number") {
++    return res.status(400).json({ ok: false, error: "lat/lng must be numbers." });
++  }
++
++  const gymLat = Number(process.env.GYM_LAT);
++  const gymLng = Number(process.env.GYM_LNG);
++  const thresholdKm = Number(process.env.GEO_PROXIMITY_KM) || 5;
++  const km = distanceKm(lat, lng, gymLat, gymLng);
++  const near = km <= thresholdKm;
++
++  const visitor = await recordEvent({
++    visitorId: req.visitorId,
++    type: near ? "geo_near" : "geo_checked",
++    meta: { distanceKm: Number(km.toFixed(2)) },
++  });
++  if (visitor) {
++    visitor.geo = { lat, lng, distanceKm: Number(km.toFixed(2)), near, capturedAt: new Date().toISOString() };
++    await db.write();
++  }
++
++  res.json({ ok: true, near, distanceKm: Number(km.toFixed(2)) });
++});
++
++export default router;
+diff --git a/server/src/routes/whatsapp.js b/server/src/routes/whatsapp.js
+new file mode 100644
+index 0000000..28eac50
+--- /dev/null
++++ b/server/src/routes/whatsapp.js
+@@ -0,0 +1,102 @@
++import { Router } from "express";
++import { db } from "../db.js";
++import { upsertLead, getLeadByPhone } from "../services/leadEngine.js";
++import { enrollLeadInDrip, cancelPendingDrip } from "../services/automation.js";
++import { sendSessionMessage, logInbound } from "../services/whatsapp.js";
++
++const router = Router();
++
++// POST /api/whatsapp/opt-in — the "message me updates on WhatsApp" checkbox
++// (Contact.jsx, ExitIntentModal.jsx). This is the ONLY path that enrolls
++// someone in the automated drip sequence, and it requires an explicit,
++// separate consent flag from the caller — ticking "book my free demo"
++// alone does not opt someone into marketing messages.
++router.post("/opt-in", async (req, res) => {
++  const { name, phone, source, wantsDemo, message } = req.body || {};
++  const cleanPhone = String(phone || "").replace(/\D/g, "");
++  if (!cleanPhone || cleanPhone.length < 10) {
++    return res.status(400).json({ ok: false, error: "A valid phone number is required." });
++  }
++
++  // Carry over any proximity data the visitor already generated (e.g. via
++  // NearbyBanner) so it shows up on the lead record in the dashboard.
++  const visitorGeo = db.data.visitors[req.visitorId]?.geo || null;
++
++  const lead = await upsertLead({
++    visitorId: req.visitorId,
++    name,
++    phone: cleanPhone,
++    source: source || "whatsapp_opt_in",
++    wantsDemo,
++    message,
++    optedInWhatsApp: true,
++    geo: visitorGeo,
++  });
++
++  await enrollLeadInDrip(lead);
++  res.status(201).json({ ok: true, lead });
++});
++
++// GET /api/whatsapp/webhook — Meta's one-time webhook verification
++// handshake. Register this URL in Meta's dashboard with the same
++// WHATSAPP_VERIFY_TOKEN set in .env.
++router.get("/webhook", (req, res) => {
++  const mode = req.query["hub.mode"];
++  const token = req.query["hub.verify_token"];
++  const challenge = req.query["hub.challenge"];
++
++  if (mode === "subscribe" && token === process.env.WHATSAPP_VERIFY_TOKEN) {
++    return res.status(200).send(challenge);
++  }
++  return res.sendStatus(403);
++});
++
++// POST /api/whatsapp/webhook — inbound messages + delivery/read status
++// updates land here. Two jobs: (1) honor STOP/unsubscribe immediately, and
++// (2) hand the conversation to a human — any other reply pauses the
++// automated drip so staff can pick it up without a bot message crossing it.
++router.post("/webhook", async (req, res) => {
++  res.sendStatus(200); // ack fast; Meta retries on non-2xx
++
++  try {
++    const entry = req.body?.entry?.[0];
++    const change = entry?.changes?.[0]?.value;
++    const messages = change?.messages;
++    if (!messages?.length) return;
++
++    for (const msg of messages) {
++      const from = msg.from;
++      const body = msg.text?.body || "";
++      const lead = await getLeadByPhone(from);
++
++      await logInbound({
++        leadId: lead?.id || null,
++        from,
++        body,
++        raw: msg,
++      });
++
++      if (!lead) continue;
++
++      const normalized = body.trim().toUpperCase();
++      if (["STOP", "UNSUBSCRIBE", "CANCEL"].includes(normalized)) {
++        lead.whatsappOptOut = true;
++        await cancelPendingDrip(lead.id, "opted_out");
++        await sendSessionMessage(
++          from,
++          "You've been unsubscribed from Xtreme Fitness Gym updates. Reply START anytime to opt back in.",
++          { leadId: lead.id }
++        );
++      } else {
++        // A real reply came in — let a human take it from here.
++        lead.status = lead.status === "new" ? "contacted" : lead.status;
++        lead.engagedManually = true;
++        await cancelPendingDrip(lead.id, "human_engaged");
++      }
++    }
++  } catch (err) {
++    console.error("[whatsapp webhook] failed to process:", err);
++  }
++});
++
++export default router;
+diff --git a/server/src/services/automation.js b/server/src/services/automation.js
+new file mode 100644
+index 0000000..6c0e3bd
+--- /dev/null
++++ b/server/src/services/automation.js
+@@ -0,0 +1,125 @@
++// The actual "automated WhatsApp follow-up" engine. On a consented opt-in,
++// this sends an immediate welcome (a *session* message — legal because the
++// person just contacted us) and schedules three template follow-ups. Every
++// scheduled send is re-checked against consent/opt-out/staff-takeover at
++// send time, not just at scheduling time, so someone who replies STOP on
++// day 2 never gets the day-3 message.
++import cron from "node-cron";
++import { randomUUID } from "node:crypto";
++import { db } from "../db.js";
++import { sendSessionMessage, sendTemplateMessage } from "./whatsapp.js";
++import { GYM } from "../constants.js";
++
++const DAY = 24 * 60 * 60 * 1000;
++
++// The drip sequence. `delayMs` is measured from the moment the lead opts in.
++// Template names come from .env so they match whatever's actually approved
++// in Meta Business Manager (see server/.env.example for the full explainer).
++function steps() {
++  return [
++    {
++      key: "day1_reminder",
++      delayMs: 1 * DAY,
++      templateEnvKey: "WHATSAPP_TEMPLATE_DAY1_REMINDER",
++      params: (lead) => [lead.name || "there", GYM.freeDemoShort],
++    },
++    {
++      key: "day3_incentive",
++      delayMs: 3 * DAY,
++      templateEnvKey: "WHATSAPP_TEMPLATE_DAY3_INCENTIVE",
++      params: (lead) => [lead.name || "there"],
++    },
++    {
++      key: "day7_winback",
++      delayMs: 7 * DAY,
++      templateEnvKey: "WHATSAPP_TEMPLATE_DAY7_WINBACK",
++      params: (lead) => [lead.name || "there"],
++    },
++  ];
++}
++
++// Call this right when a lead opts in to WhatsApp marketing. Sends the
++// immediate welcome inline (session message) and queues the rest.
++export async function enrollLeadInDrip(lead) {
++  const welcome =
++    `Hey ${lead.name || "there"}! 💪 Thanks for reaching out to ${GYM.name}. ` +
++    `Your ${GYM.freeDemoShort} is ready whenever you want to swing by — ` +
++    `${GYM.hours}, ${GYM.days}. Reply here anytime with questions, or STOP to opt out of updates.`;
++
++  await sendSessionMessage(lead.phone, welcome, { leadId: lead.id });
++
++  const now = Date.now();
++  for (const step of steps()) {
++    db.data.campaignQueue.push({
++      id: randomUUID(),
++      leadId: lead.id,
++      step: step.key,
++      channel: "whatsapp",
++      scheduledFor: new Date(now + step.delayMs).toISOString(),
++      status: "pending",
++      sentAt: null,
++    });
++  }
++  await db.write();
++}
++
++// Cancels any not-yet-sent queue items for a lead — used on opt-out (STOP
++// keyword) and when a human reply comes in (see routes/whatsapp.js), so
++// staff taking over a conversation doesn't get undercut by a bot message.
++export async function cancelPendingDrip(leadId, reason = "cancelled") {
++  let changed = false;
++  for (const item of db.data.campaignQueue) {
++    if (item.leadId === leadId && item.status === "pending") {
++      item.status = reason;
++      changed = true;
++    }
++  }
++  if (changed) await db.write();
++}
++
++async function processDueItems() {
++  const now = Date.now();
++  const due = db.data.campaignQueue.filter(
++    (item) => item.status === "pending" && new Date(item.scheduledFor).getTime() <= now
++  );
++  if (!due.length) return;
++
++  const stepConfig = Object.fromEntries(steps().map((s) => [s.key, s]));
++
++  for (const item of due) {
++    const lead = db.data.leads.find((l) => l.id === item.leadId);
++    const config = stepConfig[item.step];
++
++    // Re-check every gate at send time, not just at enqueue time.
++    if (!lead || !lead.optedInWhatsApp || lead.whatsappOptOut || lead.engagedManually || lead.status === "converted") {
++      item.status = "skipped";
++      continue;
++    }
++
++    const templateName = process.env[config.templateEnvKey];
++    if (!templateName) {
++      item.status = "skipped"; // template not configured — nothing to send
++      continue;
++    }
++
++    const result = await sendTemplateMessage(lead.phone, templateName, config.params(lead), { leadId: lead.id });
++    item.status = result.ok ? "sent" : "failed";
++    item.sentAt = new Date().toISOString();
++  }
++
++  await db.write();
++}
++
++let started = false;
++export function startAutomationScheduler() {
++  if (started) return;
++  started = true;
++  const minutes = Math.max(1, Number(process.env.AUTOMATION_TICK_MINUTES) || 15);
++  cron.schedule(`*/${minutes} * * * *`, () => {
++    processDueItems().catch((err) => console.error("[automation] tick failed:", err));
++  });
++  console.log(`[automation] drip-campaign scheduler running every ${minutes} min`);
++}
++
++// Exposed for the admin dashboard's "run now" button and for tests.
++export { processDueItems };
+diff --git a/server/src/services/leadEngine.js b/server/src/services/leadEngine.js
+new file mode 100644
+index 0000000..a3d0b3e
+--- /dev/null
++++ b/server/src/services/leadEngine.js
+@@ -0,0 +1,154 @@
++// Central place that turns raw browsing behaviour into a CRM-usable "lead"
++// record. Anonymous visitors (tracked only by the xfg_vid cookie) build up
++// an interest score just by browsing; the moment they hand over a phone
++// number (contact form, WhatsApp opt-in, exit-intent capture), that history
++// gets attached to a named Lead the gym owner can actually follow up with.
++import { randomUUID } from "node:crypto";
++import { db } from "../db.js";
++
++// Point values are deliberately rough — the goal is a "hot lead" ranking
++// for the admin dashboard, not a precise model.
++export const EVENT_WEIGHTS = {
++  page_view: 1,
++  viewed_pricing: 3,
++  viewed_programs: 2,
++  viewed_trainers: 1,
++  time_on_page_60s: 2,
++  clicked_whatsapp: 5,
++  watched_intro_complete: 1,
++  geo_near: 3,
++  exit_intent_shown: 0,
++  exit_intent_submitted: 8,
++  wants_demo: 10,
++  form_submit: 10,
++  whatsapp_opt_in: 6,
++};
++
++function ensureVisitor(visitorId) {
++  if (!visitorId) return null;
++  if (!db.data.visitors[visitorId]) {
++    db.data.visitors[visitorId] = {
++      visitorId,
++      firstSeenAt: new Date().toISOString(),
++      lastSeenAt: new Date().toISOString(),
++      utm: {},
++      interestScore: 0,
++      leadId: null,
++    };
++  }
++  return db.data.visitors[visitorId];
++}
++
++// Records one interaction (page view / click / etc), scores it, and — if
++// this visitor is already linked to a named lead — keeps that lead's score
++// and lastSeenAt in sync too, so returning-but-not-yet-converted behaviour
++// still shows up on the dashboard.
++export async function recordEvent({ visitorId, type, meta = {}, utm }) {
++  const visitor = ensureVisitor(visitorId);
++  const weight = EVENT_WEIGHTS[type] ?? 0;
++  const now = new Date().toISOString();
++
++  db.data.events.push({ id: randomUUID(), visitorId, type, meta, timestamp: now });
++
++  if (visitor) {
++    visitor.lastSeenAt = now;
++    visitor.interestScore += weight;
++    if (utm && Object.values(utm).some(Boolean)) {
++      visitor.utm = { ...visitor.utm, ...utm };
++    }
++    if (visitor.leadId) {
++      const lead = db.data.leads.find((l) => l.id === visitor.leadId);
++      if (lead) {
++        lead.interestScore += weight;
++        lead.lastSeenAt = now;
++        lead.updatedAt = now;
++      }
++    }
++  }
++
++  await db.write();
++  return visitor;
++}
++
++// Creates a new lead, or updates an existing one matched by phone number —
++// re-submitting the contact form (e.g. "actually, call me on this number
++// instead") updates the same person rather than forking a duplicate record.
++// This is the single entry point every lead-capturing surface (contact
++// form, WhatsApp opt-in checkbox, exit-intent modal) should call through.
++export async function upsertLead({
++  visitorId,
++  name,
++  phone,
++  email,
++  source,
++  message,
++  wantsDemo,
++  optedInWhatsApp,
++  geo,
++  utm,
++}) {
++  const now = new Date().toISOString();
++  const normalizedPhone = String(phone || "").replace(/\D/g, "").slice(-10);
++  let lead = db.data.leads.find((l) => l.phone === normalizedPhone);
++
++  const visitor = visitorId ? ensureVisitor(visitorId) : null;
++  const carriedScore = visitor?.interestScore ?? 0;
++  const carriedUtm = visitor?.utm ?? {};
++
++  if (lead) {
++    lead.name = name || lead.name;
++    lead.email = email ?? lead.email;
++    lead.message = message ?? lead.message;
++    if (wantsDemo) lead.wantsDemo = true;
++    if (optedInWhatsApp) {
++      lead.optedInWhatsApp = true;
++      lead.whatsappOptOut = false;
++      lead.consent = { ...lead.consent, whatsapp: { granted: true, at: now } };
++    }
++    if (geo) lead.geo = geo;
++    lead.visitorId = visitorId || lead.visitorId;
++    lead.interestScore = Math.max(lead.interestScore, carriedScore) + (EVENT_WEIGHTS.form_submit ?? 0);
++    lead.lastSeenAt = now;
++    lead.updatedAt = now;
++  } else {
++    lead = {
++      id: randomUUID(),
++      visitorId: visitorId || null,
++      name: name || "",
++      phone: normalizedPhone,
++      email: email || null,
++      source: source || "unknown",
++      utm: { ...carriedUtm, ...(utm || {}) },
++      firstSeenAt: visitor?.firstSeenAt || now,
++      lastSeenAt: now,
++      interestScore: carriedScore + (EVENT_WEIGHTS.form_submit ?? 0),
++      wantsDemo: Boolean(wantsDemo),
++      optedInWhatsApp: Boolean(optedInWhatsApp),
++      whatsappOptOut: false,
++      engagedManually: false,
++      consent: {
++        whatsapp: optedInWhatsApp ? { granted: true, at: now } : { granted: false, at: null },
++      },
++      geo: geo || null,
++      status: "new",
++      notes: "",
++      message: message || "",
++      createdAt: now,
++      updatedAt: now,
++    };
++    db.data.leads.push(lead);
++  }
++
++  if (visitor) visitor.leadId = lead.id;
++  await db.write();
++  return lead;
++}
++
++export async function getLeadById(id) {
++  return db.data.leads.find((l) => l.id === id) || null;
++}
++
++export async function getLeadByPhone(phone) {
++  const normalized = String(phone || "").replace(/\D/g, "").slice(-10);
++  return db.data.leads.find((l) => l.phone === normalized) || null;
++}
+diff --git a/server/src/services/whatsapp.js b/server/src/services/whatsapp.js
+new file mode 100644
+index 0000000..f3723f2
+--- /dev/null
++++ b/server/src/services/whatsapp.js
+@@ -0,0 +1,131 @@
++// Thin wrapper around Meta's WhatsApp Business Cloud API
++// (https://developers.facebook.com/docs/whatsapp/cloud-api).
++//
++// IMPORTANT — WhatsApp compliance, not just code hygiene:
++//   - Meta requires an *approved message template* for any business-initiated
++//     message sent outside the 24h "customer service window" (i.e. more than
++//     24h since the person last messaged you). sendTemplateMessage() is for
++//     that. sendSessionMessage() is only valid inside that 24h window (e.g.
++//     immediately after someone messages your WhatsApp or submits a form
++//     that counts as user-initiated contact).
++//   - Every send here should already be consent-gated by the caller
++//     (lead.optedInWhatsApp === true) — this file does not enforce that
++//     itself, see services/automation.js and routes/whatsapp.js.
++//
++// DRY-RUN MODE: until WHATSAPP_TOKEN / WHATSAPP_PHONE_NUMBER_ID are set in
++// .env, every "send" here just logs to whatsappLog with status
++// "simulated" and resolves successfully — so the whole opt-in -> welcome ->
++// drip pipeline can be built, demoed and tested end-to-end with zero real
++// WhatsApp Business API access, and flipping to real sends later is just
++// filling in the two env vars.
++import axios from "axios";
++import { db } from "../db.js";
++import { randomUUID } from "node:crypto";
++
++function isConfigured() {
++  return Boolean(process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID);
++}
++
++function graphUrl() {
++  const version = process.env.WHATSAPP_API_VERSION || "v21.0";
++  return `https://graph.facebook.com/${version}/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
++}
++
++async function logMessage(entry) {
++  db.data.whatsappLog.push({
++    id: randomUUID(),
++    timestamp: new Date().toISOString(),
++    ...entry,
++  });
++  await db.write();
++}
++
++// Normalizes an Indian 10-digit mobile number (or already-E.164 number) to
++// E.164 (+91XXXXXXXXXX) for the Graph API's `to` field.
++export function toE164India(rawPhone) {
++  const digits = String(rawPhone || "").replace(/\D/g, "");
++  if (digits.length === 10) return `91${digits}`;
++  if (digits.length === 12 && digits.startsWith("91")) return digits;
++  return digits; // best-effort passthrough for other formats
++}
++
++async function post(payload, { leadId, kind }) {
++  if (!isConfigured()) {
++    await logMessage({
++      leadId,
++      direction: "outbound",
++      to: payload.to,
++      kind,
++      status: "simulated",
++      payload,
++    });
++    return { ok: true, simulated: true };
++  }
++
++  try {
++    const { data } = await axios.post(graphUrl(), payload, {
++      headers: {
++        Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
++        "Content-Type": "application/json",
++      },
++      timeout: 10_000,
++    });
++    await logMessage({
++      leadId,
++      direction: "outbound",
++      to: payload.to,
++      kind,
++      status: "sent",
++      payload,
++      response: data,
++    });
++    return { ok: true, simulated: false, data };
++  } catch (err) {
++    const errData = err.response?.data || { message: err.message };
++    await logMessage({
++      leadId,
++      direction: "outbound",
++      to: payload.to,
++      kind,
++      status: "failed",
++      payload,
++      error: errData,
++    });
++    return { ok: false, simulated: false, error: errData };
++  }
++}
++
++// Free-text message — only legal inside the 24h customer-service window
++// (e.g. right after someone opts in via the contact form, or replies to us).
++export async function sendSessionMessage(to, body, { leadId } = {}) {
++  const payload = {
++    messaging_product: "whatsapp",
++    to: toE164India(to),
++    type: "text",
++    text: { body },
++  };
++  return post(payload, { leadId, kind: "session" });
++}
++
++// Approved-template message — required for anything sent outside the 24h
++// window (the automated drip: day-1 / day-3 / day-7 follow-ups).
++// `params` fills the template's {{1}}, {{2}}... body variables, in order.
++export async function sendTemplateMessage(to, templateName, params = [], { leadId, langCode = "en" } = {}) {
++  const payload = {
++    messaging_product: "whatsapp",
++    to: toE164India(to),
++    type: "template",
++    template: {
++      name: templateName,
++      language: { code: langCode },
++      components: params.length
++        ? [{ type: "body", parameters: params.map((text) => ({ type: "text", text: String(text) })) }]
++        : undefined,
++    },
++  };
++  return post(payload, { leadId, kind: `template:${templateName}` });
++}
++
++export async function logInbound(entry) {
++  return logMessage({ direction: "inbound", ...entry });
++}
+diff --git a/server/src/utils/geo.js b/server/src/utils/geo.js
+new file mode 100644
+index 0000000..24604a8
+--- /dev/null
++++ b/server/src/utils/geo.js
+@@ -0,0 +1,15 @@
++// Haversine great-circle distance between two lat/lng points, in kilometres.
++export function distanceKm(lat1, lng1, lat2, lng2) {
++  const R = 6371; // Earth radius, km
++  const dLat = toRad(lat2 - lat1);
++  const dLng = toRad(lng2 - lng1);
++  const a =
++    Math.sin(dLat / 2) ** 2 +
++    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
++  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
++  return R * c;
++}
++
++function toRad(deg) {
++  return (deg * Math.PI) / 180;
++}

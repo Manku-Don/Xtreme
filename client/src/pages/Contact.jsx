@@ -3,9 +3,11 @@ import { motion } from "framer-motion";
 import { MapPin, Clock, Phone, Mail, Send, CheckCircle2, AlertCircle, Flame, MessageCircle, Star } from "lucide-react";
 import SectionHeading from "../components/SectionHeading";
 import Reveal from "../components/Reveal";
+import NearbyBanner from "../components/NearbyBanner";
 import { GYM, API_BASE_URL, FREE_DEMO } from "../data/siteData";
+import { submitWhatsappOptIn, TAG_OPTIONS } from "../utils/tracking";
 
-const initialForm = { name: "", phone: "", message: "", wantsDemo: false };
+const initialForm = { name: "", phone: "", message: "", wantsDemo: false, wantsWhatsappUpdates: false, tags: [] };
 
 export default function Contact() {
   const [form, setForm] = useState(initialForm);
@@ -20,6 +22,13 @@ export default function Contact() {
     setForm((f) => ({ ...f, phone: digitsOnly }));
   };
 
+  const toggleTag = (tagId) => {
+    setForm((f) => ({
+      ...f,
+      tags: f.tags.includes(tagId) ? f.tags.filter((t) => t !== tagId) : [...f.tags, tagId],
+    }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setStatus("loading");
@@ -30,9 +39,23 @@ export default function Contact() {
       const res = await fetch(`${API_BASE_URL}/api/enquiry`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: form.name, phone: form.phone, message }),
+        body: JSON.stringify({ name: form.name, phone: form.phone, message, tags: form.tags }),
       });
       if (!res.ok) throw new Error("Request failed");
+
+      // Separate, explicit opt-in — booking a demo doesn't by itself sign
+      // someone up for ongoing WhatsApp marketing messages.
+      if (form.wantsWhatsappUpdates) {
+        await submitWhatsappOptIn({
+          name: form.name,
+          phone: form.phone,
+          source: "contact_form",
+          wantsDemo: form.wantsDemo,
+          message,
+          tags: form.tags,
+        });
+      }
+
       setStatus("success");
       setForm(initialForm);
     } catch {
@@ -141,6 +164,13 @@ export default function Contact() {
               </div>
             </div>
           </div>
+
+          <div className="border border-line bg-panel p-5">
+            <p className="text-stencil mb-3 text-xs font-bold text-chalk-dim">
+              Coming from work or home?
+            </p>
+            <NearbyBanner />
+          </div>
         </Reveal>
 
         <Reveal delay={0.1} className="mt-10 border border-line bg-panel p-7 sm:p-10 lg:mt-0">
@@ -243,6 +273,54 @@ export default function Contact() {
                 {FREE_DEMO.body} <span className="font-semibold text-plate-red/80">Limited to 5 demos per day. BOOK NOW!</span>
               </span>
             </label>
+
+            <label
+              htmlFor="wantsWhatsappUpdates"
+              className="group flex cursor-pointer items-start gap-3 border border-line-strong px-4 py-3.5 transition-colors hover:border-chalk"
+            >
+              <input
+                id="wantsWhatsappUpdates"
+                name="wantsWhatsappUpdates"
+                type="checkbox"
+                checked={form.wantsWhatsappUpdates}
+                onChange={(e) => setForm((f) => ({ ...f, wantsWhatsappUpdates: e.target.checked }))}
+                className="mt-0.5 h-4 w-4 shrink-0 accent-[#25D366] cursor-pointer"
+              />
+              <span className="text-sm text-chalk-dim">
+                <span className="inline-flex items-center gap-1.5 font-semibold text-chalk">
+                  Also message me updates &amp; demo reminders on WhatsApp
+                </span>
+                <br />
+                A few helpful nudges, never spam — reply STOP anytime to opt out.
+              </span>
+            </label>
+
+            <div className="border border-line-strong px-4 py-3.5">
+              <p className="text-sm font-semibold text-chalk">Tell us a bit about yourself</p>
+              <p className="mt-0.5 text-xs text-steel-dim">
+                Optional — helps us point you to the right slots and trainer.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {TAG_OPTIONS.map((tag) => {
+                  const active = form.tags.includes(tag.id);
+                  return (
+                    <button
+                      key={tag.id}
+                      type="button"
+                      onClick={() => toggleTag(tag.id)}
+                      aria-pressed={active}
+                      className={`text-stencil border px-3 py-2 text-xs font-bold tracking-[0.04em] transition-colors ${
+                        active
+                          ? "border-plate-yellow bg-plate-yellow/10 text-plate-yellow"
+                          : "border-line-strong text-chalk-dim hover:border-chalk hover:text-chalk"
+                      }`}
+                    >
+                      {tag.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
             <motion.button
               whileTap={{ scale: 0.97 }}

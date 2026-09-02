@@ -1,8 +1,11 @@
+import { useEffect } from "react";
 import { Routes, Route, useLocation } from "react-router-dom";
 import { AnimatePresence, motion, MotionConfig } from "framer-motion";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import ScrollToTop from "./components/ScrollToTop";
+import CookieConsent from "./components/CookieConsent";
+import ExitIntentModal from "./components/ExitIntentModal";
 import Home from "./pages/Home";
 import About from "./pages/About";
 import Trainers from "./pages/Trainers";
@@ -10,6 +13,8 @@ import Programs from "./pages/Programs";
 import Pricing from "./pages/Pricing";
 import Gallery from "./pages/Gallery";
 import Contact from "./pages/Contact";
+import Admin from "./pages/Admin";
+import { trackVisit } from "./utils/tracking";
 
 function PageWrapper({ children }) {
   return (
@@ -26,6 +31,22 @@ function PageWrapper({ children }) {
 
 export default function App() {
   const location = useLocation();
+  const isAdmin = location.pathname.startsWith("/admin");
+
+  // One page-view beacon per route change (consent-gated inside trackVisit).
+  useEffect(() => {
+    if (!isAdmin) trackVisit(location.pathname);
+  }, [location.pathname, isAdmin]);
+
+  if (isAdmin) {
+    // The owner's dashboard is deliberately outside the public chrome —
+    // no navbar/footer/marketing widgets, and it isn't linked from NAV_LINKS.
+    return (
+      <Routes>
+        <Route path="/admin" element={<Admin />} />
+      </Routes>
+    );
+  }
 
   return (
     <MotionConfig reducedMotion="user">
@@ -44,6 +65,8 @@ export default function App() {
           </Routes>
         </AnimatePresence>
         <Footer />
+        <ExitIntentModal path={location.pathname} />
+        <CookieConsent />
       </div>
     </MotionConfig>
   );

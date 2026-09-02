@@ -80,9 +80,9 @@ export const GYM = {
   name: "Xtreme Fitness Gym",
   tagline: "Train Like It Costs More.",
   subTagline: "International powerlifting coaches. Air-conditioned floor. Honest pricing.",
-  phone: "+91 97114 03248", // pulled from the gym's public Google Business listing — confirm this is current
+  phone: "+91 79826 09569",
   email: "hello@xtremefitnessgym.in", // TODO: replace with real email
-  whatsapp: "https://wa.me/919711403248",
+  whatsapp: "https://wa.me/917982609569",
   hours: "5:00 AM – 10:00 PM",
   days: "Monday – Saturday",
   closedNote: "Closed Sundays",
@@ -92,6 +92,7 @@ export const GYM = {
     mapsShareUrl: "https://share.google/VYMzK8u07tUKEAclV",
     mapsEmbedQuery: "Xtreme Fitness Gym, B-4 Pankha Road, Raghu Nagar, Dabri, New Delhi 110045",
     placeId: "ChIJlVKbEOgbDTkRagcWRBXfRqc",
+    coordinates: { lat: 28.6112664, lng: 77.0908111 },
   },
 };
 

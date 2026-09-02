@@ -10,6 +10,7 @@ import ProgramCard from "../components/ProgramCard";
 import PricingCard from "../components/PricingCard";
 import ReviewsCarousel from "../components/ReviewsCarousel";
 import StatsStrip from "../components/StatsStrip";
+import NearbyBanner from "../components/NearbyBanner";
 import FloatingWhatsApp from "../components/FloatingWhatsApp";
 import { WHY_US, PROGRAMS, PRICING_PLANS, GYM, IMAGES, FREE_DEMO } from "../data/siteData";
 
@@ -223,6 +224,29 @@ export default function Home() {
         transition={{ duration: 1, delay: isFirstLoad ? 1.4 : 0 }}
       >
         <StatsStrip />
+
+        {/* NEAR YOU — proximity is our main audience, so this gets prime
+            real estate right below the fold, not buried on the Contact page.
+            Deliberately no named neighbourhoods here — the proximity check
+            itself tells each visitor their own distance instead of us
+            guessing at a service-area list. */}
+        <section className="border-t border-line bg-panel/40 px-5 py-16 sm:px-8">
+          <div className="mx-auto flex max-w-7xl flex-col items-start gap-6 sm:flex-row sm:justify-between">
+            <div>
+              <p className="text-stencil text-xs font-bold tracking-[0.12em] text-plate-yellow">
+                WEST DELHI
+              </p>
+              <h3 className="text-display mt-1 text-2xl text-chalk sm:text-3xl">
+                Closer than you think.
+              </h3>
+              <p className="mt-1.5 max-w-md text-sm text-steel">
+                Wherever you're commuting from, see exactly how close your gym really is —
+                takes five seconds.
+              </p>
+            </div>
+            <NearbyBanner />
+          </div>
+        </section>
 
         {/* WHY US */}
         <section className="border-t border-line bg-panel/40 px-5 py-24 sm:px-8">
