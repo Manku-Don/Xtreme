@@ -14,6 +14,18 @@ export default function NearbyBanner() {
   const [phone, setPhone] = useState("");
   const [sent, setSent] = useState(false);
 
+  // Dynamic formatter: shows meters if under 1km, otherwise 1 decimal place max
+  const formatDistance = (km) => {
+    if (!km) return "";
+    if (km < 1) {
+      return `${Math.round(km * 1000)} meters`;
+    }
+    // Number() automatically drops trailing zeros (e.g., 5.0 becomes 5, 5.12 becomes 5.1)
+    return `${Number(km.toFixed(1))} km`;
+  };
+
+  const formattedDistance = formatDistance(distanceKm);
+
   const handleCheck = () => {
     if (!navigator.geolocation) {
       setState("denied");
@@ -41,7 +53,7 @@ export default function NearbyBanner() {
       phone,
       source: "nearby_banner",
       wantsDemo: true,
-      message: `Nearby visitor (${distanceKm}km) requested directions/demo info`,
+      message: `Nearby visitor (${formattedDistance}) requested directions/demo info`,
     });
     if (ok) {
       setSent(true);
@@ -85,7 +97,7 @@ export default function NearbyBanner() {
           <>
             <p className="flex items-center gap-2 text-sm font-semibold text-chalk">
               <MapPin size={16} className="text-plate-yellow" />
-              You're only {distanceKm} km away — closer than you thought.
+              You're only {formattedDistance} away — closer than you thought.
             </p>
             <p className="mt-1.5 text-sm text-steel">
               Swing by any open hour ({GYM.hours}, {GYM.days}), or get the address and free
@@ -123,7 +135,7 @@ export default function NearbyBanner() {
         {state === "far" && (
           <p className="flex items-center gap-2 text-sm text-steel">
             <MapPin size={16} className="text-steel-dim" />
-            You're {distanceKm} km away — still an easy trip on the days you train.
+            You're {formattedDistance} away — still an easy trip on the days you train.
           </p>
         )}
       </motion.div>

@@ -17,7 +17,7 @@
     "express": "^5.2.1",
     "express-rate-limit": "^7.5.0",
     "geoip-lite": "^1.4.10",
-    "helmet": "^8.0.0",
+    "helmet": "^8.3.0",
     "lowdb": "^7.0.1",
     "node-cron": "^3.0.3"
   },

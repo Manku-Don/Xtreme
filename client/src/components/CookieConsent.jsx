@@ -32,7 +32,9 @@ export default function CookieConsent() {
             <div className="flex gap-3">
               <Cookie size={20} className="mt-0.5 shrink-0 text-plate-yellow" />
               <p className="text-sm leading-relaxed text-chalk-dim">
-                We use third-party cookies to personalize your experience. By clicking "Accept", you consent to our use of cookies and our "Terms of Service". 
+                We use a first-party cookie to remember your visit and follow up on
+                enquiries you've asked us about — no third-party ad trackers, nothing
+                sold on. Seeing what you looked at helps us reply faster, not slower.
               </p>
             </div>
             <div className="flex shrink-0 gap-3">
