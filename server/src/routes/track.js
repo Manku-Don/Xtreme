@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db } from "../db.js";
 import { distanceKm, resolveCoarseLocation } from "../utils/geo.js";
 import { recordEvent } from "../services/leadEngine.js";
+import { GYM } from "../constants.js";
 
 const router = Router();
 
@@ -13,8 +14,10 @@ const router = Router();
 // utils/geo.js:resolveCoarseLocation for why this is deliberately fuzzy.
 router.post("/visit", async (req, res) => {
   const { path: pagePath, referrer, utm } = req.body || {};
-  const gymLat = Number(process.env.GYM_LAT);
-  const gymLng = Number(process.env.GYM_LNG);
+  // Falls back to the real, known gym coordinates (see constants.js) so this
+  // never silently breaks with NaN if the env vars are unset.
+  const gymLat = Number(process.env.GYM_LAT) || GYM.lat;
+  const gymLng = Number(process.env.GYM_LNG) || GYM.lng;
   const coarseLocation = resolveCoarseLocation(req.ip, gymLat, gymLng);
 
   const visitor = await recordEvent({
@@ -57,8 +60,8 @@ router.post("/geo", async (req, res) => {
     return res.status(400).json({ ok: false, error: "lat/lng must be numbers." });
   }
 
-  const gymLat = Number(process.env.GYM_LAT);
-  const gymLng = Number(process.env.GYM_LNG);
+  const gymLat = Number(process.env.GYM_LAT) || GYM.lat;
+  const gymLng = Number(process.env.GYM_LNG) || GYM.lng;
   const thresholdKm = Number(process.env.GEO_PROXIMITY_KM) || 5;
   const km = distanceKm(lat, lng, gymLat, gymLng);
   const near = km <= thresholdKm;

@@ -14,6 +14,7 @@ import Pricing from "./pages/Pricing";
 import Gallery from "./pages/Gallery";
 import Contact from "./pages/Contact";
 import Admin from "./pages/Admin";
+import NotFound from "./pages/NotFound";
 import { trackVisit } from "./utils/tracking";
 
 function PageWrapper({ children }) {
@@ -62,6 +63,7 @@ export default function App() {
             <Route path="/pricing" element={<PageWrapper><Pricing /></PageWrapper>} />
             <Route path="/gallery" element={<PageWrapper><Gallery /></PageWrapper>} />
             <Route path="/contact" element={<PageWrapper><Contact /></PageWrapper>} />
+            <Route path="*" element={<PageWrapper><NotFound /></PageWrapper>} />
           </Routes>
         </AnimatePresence>
         <Footer />

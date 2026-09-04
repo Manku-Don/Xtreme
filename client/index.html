@@ -4,16 +4,76 @@
     <meta charset="UTF-8" />
     <!-- Favicon: the gym's own logo mark -->
     <link rel="icon" type="image/png" href="/Xtreme logo.png" />
+    <link rel="apple-touch-icon" href="/Xtreme logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0c0c0e" />
     <meta name="description" content="Xtreme Fitness Gym — air-conditioned strength training gym coached by international powerlifters. Personal training, open 5am-10pm, Monday to Saturday. Plans from Rs 1,200/month." />
     <title>Xtreme Fitness Gym — Train Like It Costs More</title>
+
+    <!--
+      NOTE: canonical/og:url/twitter:image below use a placeholder domain
+      (www.xtremefitnessgym.in) since the real production domain wasn't set
+      yet at the time this was written. Replace every instance of that
+      domain with the actual live domain before/right after deploying, or
+      social share previews and search-engine canonicalization will point
+      at the wrong place.
+    -->
+    <link rel="canonical" href="https://www.xtremefitnessgym.in/" />
+
+    <!-- Open Graph (Facebook, WhatsApp, Instagram link previews) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Xtreme Fitness Gym" />
+    <meta property="og:title" content="Xtreme Fitness Gym — Train Like It Costs More" />
+    <meta property="og:description" content="Air-conditioned strength training gym coached by international powerlifters in West Delhi. Personal training, open 5am–10pm Mon–Sat. Plans from ₹1,200/month. Claim your 1-day free demo." />
+    <meta property="og:image" content="https://www.xtremefitnessgym.in/images/gym-floor-wide-shot.jpeg" />
+    <meta property="og:url" content="https://www.xtremefitnessgym.in/" />
+    <meta property="og:locale" content="en_IN" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Xtreme Fitness Gym — Train Like It Costs More" />
+    <meta name="twitter:description" content="Air-conditioned strength training gym coached by international powerlifters in West Delhi. Plans from ₹1,200/month. Claim your 1-day free demo." />
+    <meta name="twitter:image" content="https://www.xtremefitnessgym.in/images/gym-floor-wide-shot.jpeg" />
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Anton&family=Big+Shoulders+Stencil+Text:wght@500;700;900&family=Manrope:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
+
+    <!-- Structured data so Google can show this as a local gym listing
+         (hours, address, rating) directly in search results. -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "ExerciseGym",
+        "name": "Xtreme Fitness Gym",
+        "image": "https://www.xtremefitnessgym.in/images/gym-floor-wide-shot.jpeg",
+        "url": "https://www.xtremefitnessgym.in/",
+        "telephone": "+91-79826-09569",
+        "priceRange": "₹₹",
+        "address": {
+          "@type": "PostalAddress",
+          "streetAddress": "B-4, Pankha Rd, opp. Janak Cinema Complex, Block A, Raghu Nagar, Dabri",
+          "addressLocality": "New Delhi",
+          "addressRegion": "Delhi",
+          "postalCode": "110045",
+          "addressCountry": "IN"
+        },
+        "geo": {
+          "@type": "GeoCoordinates",
+          "latitude": 28.6112664,
+          "longitude": 77.0908111
+        },
+        "openingHoursSpecification": {
+          "@type": "OpeningHoursSpecification",
+          "dayOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+          "opens": "05:00",
+          "closes": "22:00"
+        }
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

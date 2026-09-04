@@ -163,7 +163,7 @@ export const PROGRAMS = [
     summary:
       "One-to-one programming with a powerlifting coach who plans your sessions, tracks your numbers, and corrects your form set by set.",
     points: ["1-on-1 coaching", "Form correction on every lift", "Progression tracking"],
-    image: "/images/Personal Training.png",
+    image: "/images/Personal Training.jpg",
   },
   {
     id: "strength-powerlifting",
@@ -171,7 +171,7 @@ export const PROGRAMS = [
     summary:
       "Squat, bench and deadlift built on real programming — for members who want to chase real numbers, not just a pump.",
     points: ["Structured programming", "Technique built from competition standards", "Progressive overload tracking"],
-    image: "/images/Powerlifting.png",
+    image: "/images/Powerlifting.jpg",
   },
   {
     id: "general-fitness",
@@ -179,7 +179,7 @@ export const PROGRAMS = [
     summary:
       "Full run of the AC floor — free weights, machines and conditioning space — for members training on their own schedule.",
     points: ["Full equipment access", "5 AM – 10 PM, 6 days a week", "Air-conditioned floor"],
-    image: "/images/General Fitness.png",
+    image: "/images/General Fitness.jpg",
   },
 ];
 

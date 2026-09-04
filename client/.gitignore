@@ -12,6 +12,13 @@ dist
 dist-ssr
 *.local
 
+# Environment files — real values are per-environment (local dev vs. the
+# production build's VITE_API_BASE_URL) and shouldn't be committed.
+# .env.example stays tracked as the template.
+.env
+.env.local
+.env.*.local
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
